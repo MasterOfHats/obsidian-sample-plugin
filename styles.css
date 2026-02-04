@@ -57,64 +57,40 @@ If your plugin does not need CSS, delete this file.
 	min-height: 0;
 }
 
-/* ── Star picker ───────────────────────────────────────── */
+/* ── Starway selector ──────────────────────────────────── */
 
-.solar-system-picker {
+.starway-selector {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
+	justify-content: center;
 	padding: 32px 16px;
-	overflow-y: auto;
 }
 
-.solar-system-picker-title {
+.starway-selector-title {
 	color: rgba(255, 255, 255, 0.85);
 	font-size: 18px;
 	font-weight: 600;
-	margin: 0 0 24px;
+	margin: 0 0 20px;
 }
 
-.solar-system-picker-empty {
+.starway-selector-empty {
 	color: rgba(255, 255, 255, 0.45);
 	font-size: 14px;
 }
 
-.solar-system-star-list {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	width: 100%;
-	max-width: 320px;
-}
-
-.solar-system-star-item {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	padding: 10px 14px;
-	background-color: rgba(255, 255, 255, 0.04);
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	border-radius: 6px;
+.starway-selector-dropdown {
+	min-width: 200px;
+	padding: 6px 12px;
+	background-color: #1a1a2e;
 	color: #ffffff;
-	font-size: 15px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 4px;
+	font-size: 14px;
 	cursor: pointer;
-	text-align: left;
 }
 
-.solar-system-star-item:hover {
-	background-color: rgba(255, 255, 255, 0.08);
-	border-color: rgba(255, 255, 255, 0.25);
-}
-
-.solar-system-star-swatch {
-	width: 14px;
-	height: 14px;
-	border-radius: 50%;
-	flex-shrink: 0;
-	box-shadow: 0 0 6px currentColor;
-}
-
-.solar-system-star-item-name {
-	flex: 1;
+.starway-selector-dropdown:hover {
+	border-color: rgba(255, 255, 255, 0.3);
 }

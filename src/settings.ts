@@ -4,12 +4,14 @@ import MyPlugin from "./main";
 export interface MyPluginSettings {
 	mySetting: string;
 	solarSystemFolder: string;
+	selectedStarway: string;
 	selectedStar: string;
 }
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: 'default',
 	solarSystemFolder: '',
+	selectedStarway: '',
 	selectedStar: '',
 }
 

@@ -1,22 +1,26 @@
 import {ItemView, TFile, WorkspaceLeaf, debounce, EventRef, setIcon} from "obsidian";
 import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, StarData, PLANET_DEFAULTS, STAR_DEFAULTS} from "../types";
 import {render, hitTest} from "./SolarSystemRenderer";
+import {renderStarway, starwayHitTest} from "./StarwayRenderer";
 import MyPlugin from "../main";
 
-type ViewMode = "picker" | "system";
+type ViewMode = "selector" | "starway" | "system";
 
 export class SolarSystemView extends ItemView {
 	private plugin: MyPlugin;
 	private canvas: HTMLCanvasElement;
 	private ctx: CanvasRenderingContext2D;
 	private planets: PlanetData[] = [];
-	private stars: StarData[] = [];
+	private allStars: StarData[] = [];
+	private starwayStars: StarData[] = [];
+	private starways: string[] = [];
+	private selectedStarway: string | null = null;
 	private selectedStar: StarData | null = null;
 	private animFrameId: number | null = null;
 	private startTime = 0;
 	private resizeObserver: ResizeObserver | null = null;
 	private eventRefs: EventRef[] = [];
-	private mode: ViewMode = "picker";
+	private mode: ViewMode = "selector";
 
 	constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
 		super(leaf);
@@ -28,7 +32,9 @@ export class SolarSystemView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return this.selectedStar?.name ?? "Solar System";
+		if (this.mode === "system" && this.selectedStar) return this.selectedStar.name;
+		if (this.mode === "starway" && this.selectedStarway) return this.selectedStarway;
+		return "Solar System";
 	}
 
 	getIcon(): string {
@@ -36,23 +42,20 @@ export class SolarSystemView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
-		this.loadStars();
+		this.loadAllStars();
 
-		// If a star is already selected, go straight to system view
-		if (this.selectedStar) {
+		// Restore deepest saved state
+		if (this.selectedStar && this.selectedStarway) {
+			this.filterStarwayStars();
 			this.showSystem();
+		} else if (this.selectedStarway) {
+			this.filterStarwayStars();
+			this.showStarway();
 		} else {
-			this.showPicker();
+			this.showSelector();
 		}
 
-		const debouncedReload = debounce(() => {
-			this.loadStars();
-			if (this.mode === "system") {
-				this.loadPlanets();
-			} else {
-				this.renderPicker();
-			}
-		}, 150, true);
+		const debouncedReload = debounce(() => this.reloadData(), 150, true);
 
 		this.eventRefs.push(
 			this.app.metadataCache.on("changed", (file) => {
@@ -75,13 +78,7 @@ export class SolarSystemView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
-		this.stopAnimation();
-		if (this.resizeObserver) {
-			this.resizeObserver.disconnect();
-			this.resizeObserver = null;
-		}
-		this.canvas?.removeEventListener("click", this.onClick);
-		this.canvas?.removeEventListener("mousemove", this.onMouseMove);
+		this.teardownCanvas();
 		for (const ref of this.eventRefs) {
 			this.app.metadataCache.offref(ref);
 			this.app.vault.offref(ref);
@@ -90,76 +87,101 @@ export class SolarSystemView extends ItemView {
 	}
 
 	onResize(): void {
-		if (this.mode === "system") {
+		if (this.mode === "system" || this.mode === "starway") {
 			this.resizeCanvas();
 		}
 	}
 
 	refresh(): void {
-		this.loadStars();
+		this.reloadData();
+	}
+
+	private reloadData(): void {
+		this.loadAllStars();
+		if (this.selectedStarway) this.filterStarwayStars();
 		if (this.mode === "system") {
 			this.loadPlanets();
 			this.startAnimation();
+		} else if (this.mode === "starway") {
+			this.startAnimation();
 		} else {
-			this.renderPicker();
+			this.renderSelector();
 		}
 	}
 
-	// ── Picker view ──────────────────────────────────────────
+	// ── Selector view (dropdown) ─────────────────────────────
 
-	private showPicker(): void {
-		this.mode = "picker";
-		this.stopAnimation();
-		this.teardownSystemDOM();
-		this.renderPicker();
+	private showSelector(): void {
+		this.mode = "selector";
+		this.teardownCanvas();
+		this.renderSelector();
+		this.updateHeader();
 	}
 
-	private renderPicker(): void {
+	private renderSelector(): void {
 		const container = this.contentEl;
 		container.empty();
 		container.addClass("solar-system-container");
 
-		const picker = container.createEl("div", {cls: "solar-system-picker"});
-		picker.createEl("h2", {text: "Select a star system", cls: "solar-system-picker-title"});
+		const wrapper = container.createEl("div", {cls: "starway-selector"});
+		wrapper.createEl("h2", {text: "Select a starway", cls: "starway-selector-title"});
 
-		if (this.stars.length === 0) {
-			picker.createEl("p", {text: "No stars found. Add files with LocationType: \"Star\" to your folder.", cls: "solar-system-picker-empty"});
+		if (this.starways.length === 0) {
+			wrapper.createEl("p", {
+				text: "No starways found. Add a Starway property to your Star files.",
+				cls: "starway-selector-empty",
+			});
 			return;
 		}
 
-		const list = picker.createEl("div", {cls: "solar-system-star-list"});
-		for (const star of this.stars) {
-			const item = list.createEl("button", {cls: "solar-system-star-item"});
-
-			const swatch = item.createEl("span", {cls: "solar-system-star-swatch"});
-			swatch.style.backgroundColor = star.color;
-
-			item.createEl("span", {text: star.name, cls: "solar-system-star-item-name"});
-
-			item.addEventListener("click", () => this.selectStar(star));
+		const select = wrapper.createEl("select", {cls: "starway-selector-dropdown"});
+		select.createEl("option", {text: "-- choose --", value: ""});
+		for (const name of this.starways) {
+			const opt = select.createEl("option", {text: name, value: name});
+			if (this.selectedStarway === name) opt.selected = true;
 		}
+		select.addEventListener("change", () => {
+			if (select.value) this.selectStarway(select.value);
+		});
 	}
 
-	// ── System view ──────────────────────────────────────────
+	// ── Starway view (constellation canvas) ──────────────────
+
+	private showStarway(): void {
+		this.mode = "starway";
+		this.buildCanvasDOM("Starways", () => this.showSelector());
+		this.startAnimation();
+		this.updateHeader();
+	}
+
+	// ── System view (solar system canvas) ────────────────────
 
 	private showSystem(): void {
 		this.mode = "system";
-		this.buildSystemDOM();
+		const label = this.selectedStarway ?? "Stars";
+		this.buildCanvasDOM(label, () => this.showStarway());
 		this.loadPlanets();
 		this.startAnimation();
+		this.updateHeader();
 	}
 
-	private buildSystemDOM(): void {
+	// ── Shared canvas DOM ────────────────────────────────────
+
+	private buildCanvasDOM(backLabel: string, onBack: () => void): void {
+		this.teardownCanvas();
+
 		const container = this.contentEl;
 		container.empty();
 		container.addClass("solar-system-container");
 
-		// Back button toolbar
 		const toolbar = container.createEl("div", {cls: "solar-system-toolbar"});
-		const backBtn = toolbar.createEl("button", {cls: "solar-system-back-btn", attr: {"aria-label": "Back to star selection"}});
+		const backBtn = toolbar.createEl("button", {
+			cls: "solar-system-back-btn",
+			attr: {"aria-label": `Back to ${backLabel}`},
+		});
 		setIcon(backBtn, "arrow-left");
-		backBtn.createEl("span", {text: "Stars"});
-		backBtn.addEventListener("click", () => this.showPicker());
+		backBtn.createEl("span", {text: backLabel});
+		backBtn.addEventListener("click", onBack);
 
 		this.canvas = container.createEl("canvas", {cls: "solar-system-canvas"});
 		const ctx = this.canvas.getContext("2d");
@@ -167,32 +189,55 @@ export class SolarSystemView extends ItemView {
 		this.ctx = ctx;
 
 		this.resizeCanvas();
-
 		this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
 		this.resizeObserver.observe(container);
 
-		this.canvas.addEventListener("click", this.onClick);
-		this.canvas.addEventListener("mousemove", this.onMouseMove);
+		this.canvas.addEventListener("click", this.onCanvasClick);
+		this.canvas.addEventListener("mousemove", this.onCanvasMouseMove);
 	}
 
-	private teardownSystemDOM(): void {
-		this.canvas?.removeEventListener("click", this.onClick);
-		this.canvas?.removeEventListener("mousemove", this.onMouseMove);
+	private teardownCanvas(): void {
+		this.stopAnimation();
+		this.canvas?.removeEventListener("click", this.onCanvasClick);
+		this.canvas?.removeEventListener("mousemove", this.onCanvasMouseMove);
 		if (this.resizeObserver) {
 			this.resizeObserver.disconnect();
 			this.resizeObserver = null;
 		}
 	}
 
-	// ── Star / planet data ───────────────────────────────────
+	private resizeCanvas(): void {
+		const container = this.contentEl;
+		const dpr = window.devicePixelRatio || 1;
+		const width = container.clientWidth;
+		const height = container.clientHeight;
+		this.canvas.width = width * dpr;
+		this.canvas.height = height * dpr;
+		this.canvas.style.width = width + "px";
+		this.canvas.style.height = height + "px";
+		this.ctx?.scale(dpr, dpr);
+	}
+
+	// ── Selection actions ────────────────────────────────────
+
+	private async selectStarway(name: string): Promise<void> {
+		this.selectedStarway = name;
+		this.selectedStar = null;
+		this.plugin.settings.selectedStarway = name;
+		this.plugin.settings.selectedStar = "";
+		await this.plugin.saveData(this.plugin.settings);
+		this.filterStarwayStars();
+		this.showStarway();
+	}
 
 	private async selectStar(star: StarData): Promise<void> {
 		this.selectedStar = star;
 		this.plugin.settings.selectedStar = star.name;
 		await this.plugin.saveData(this.plugin.settings);
-		(this.leaf as unknown as {updateHeader(): void}).updateHeader();
 		this.showSystem();
 	}
+
+	// ── Data loading ─────────────────────────────────────────
 
 	private isInFolder(file: TFile): boolean {
 		const folder = this.plugin.settings.solarSystemFolder;
@@ -200,10 +245,12 @@ export class SolarSystemView extends ItemView {
 		return file.path.startsWith(folder + "/");
 	}
 
-	private loadStars(): void {
+	private loadAllStars(): void {
 		const folder = this.plugin.settings.solarSystemFolder;
 		if (!folder) {
-			this.stars = [];
+			this.allStars = [];
+			this.starways = [];
+			this.selectedStarway = null;
 			this.selectedStar = null;
 			this.planets = [];
 			return;
@@ -211,7 +258,9 @@ export class SolarSystemView extends ItemView {
 
 		const abstractFolder = this.app.vault.getAbstractFileByPath(folder);
 		if (!abstractFolder) {
-			this.stars = [];
+			this.allStars = [];
+			this.starways = [];
+			this.selectedStarway = null;
 			this.selectedStar = null;
 			this.planets = [];
 			return;
@@ -219,11 +268,15 @@ export class SolarSystemView extends ItemView {
 
 		const files = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folder + "/"));
 
-		this.stars = files
+		this.allStars = files
 			.filter(file => {
 				const cache = this.app.metadataCache.getFileCache(file);
-				const locationType = cache?.frontmatter?.LocationType;
-				return typeof locationType === "string" && locationType.toLowerCase() === "star";
+				const lt = cache?.frontmatter?.LocationType;
+				const sw = cache?.frontmatter?.Starway;
+				return (
+					typeof lt === "string" && lt.toLowerCase() === "star" &&
+					typeof sw === "string" && sw.length > 0
+				);
 			})
 			.map(file => {
 				const cache = this.app.metadataCache.getFileCache(file);
@@ -233,19 +286,38 @@ export class SolarSystemView extends ItemView {
 					filePath: file.path,
 					color: typeof fm?.star_color === "string" ? fm.star_color : STAR_DEFAULTS.color,
 					size: this.numOrDefault(fm?.star_size, STAR_DEFAULTS.size),
+					starway: fm!.Starway as string,
 				};
 			});
 
-		// Restore selection or default to first star
-		const savedName = this.plugin.settings.selectedStar;
-		const match = this.stars.find(s => s.name === savedName);
-		if (match) {
-			this.selectedStar = match;
-		} else if (this.stars.length > 0) {
-			this.selectedStar = this.stars[0]!;
+		// Collect unique starway names, sorted alphabetically
+		const swSet = new Set(this.allStars.map(s => s.starway));
+		this.starways = [...swSet].sort();
+
+		// Restore saved starway
+		const savedSW = this.plugin.settings.selectedStarway;
+		if (savedSW && swSet.has(savedSW)) {
+			this.selectedStarway = savedSW;
+		} else if (this.starways.length > 0) {
+			this.selectedStarway = this.starways[0]!;
 		} else {
+			this.selectedStarway = null;
+		}
+
+		// Restore saved star
+		if (this.selectedStarway) {
+			this.filterStarwayStars();
+			const savedStar = this.plugin.settings.selectedStar;
+			const match = this.starwayStars.find(s => s.name === savedStar);
+			this.selectedStar = match ?? null;
+		} else {
+			this.starwayStars = [];
 			this.selectedStar = null;
 		}
+	}
+
+	private filterStarwayStars(): void {
+		this.starwayStars = this.allStars.filter(s => s.starway === this.selectedStarway);
 	}
 
 	private loadPlanets(): void {
@@ -291,23 +363,7 @@ export class SolarSystemView extends ItemView {
 			});
 	}
 
-	// ── Canvas helpers ───────────────────────────────────────
-
-	private resizeCanvas(): void {
-		const container = this.contentEl;
-		const dpr = window.devicePixelRatio || 1;
-		const width = container.clientWidth;
-		const height = container.clientHeight;
-		this.canvas.width = width * dpr;
-		this.canvas.height = height * dpr;
-		this.canvas.style.width = width + "px";
-		this.canvas.style.height = height + "px";
-		this.ctx?.scale(dpr, dpr);
-	}
-
-	private numOrDefault(value: unknown, fallback: number): number {
-		return typeof value === "number" && isFinite(value) ? value : fallback;
-	}
+	// ── Animation ────────────────────────────────────────────
 
 	private startAnimation(): void {
 		this.stopAnimation();
@@ -318,7 +374,11 @@ export class SolarSystemView extends ItemView {
 			const width = this.canvas.width / dpr;
 			const height = this.canvas.height / dpr;
 			this.ctx.save();
-			render(this.ctx, width, height, this.planets, time, this.selectedStar);
+			if (this.mode === "starway") {
+				renderStarway(this.ctx, width, height, this.starwayStars, time, this.selectedStarway ?? "");
+			} else {
+				render(this.ctx, width, height, this.planets, time, this.selectedStar);
+			}
 			this.ctx.restore();
 			this.animFrameId = requestAnimationFrame(frame);
 		};
@@ -332,12 +392,15 @@ export class SolarSystemView extends ItemView {
 		}
 	}
 
+	// ── Canvas interaction ───────────────────────────────────
+
+	private numOrDefault(value: unknown, fallback: number): number {
+		return typeof value === "number" && isFinite(value) ? value : fallback;
+	}
+
 	private getCanvasCoords(evt: MouseEvent): {x: number; y: number} {
 		const rect = this.canvas.getBoundingClientRect();
-		return {
-			x: evt.clientX - rect.left,
-			y: evt.clientY - rect.top,
-		};
+		return {x: evt.clientX - rect.left, y: evt.clientY - rect.top};
 	}
 
 	private currentTime(): number {
@@ -346,28 +409,41 @@ export class SolarSystemView extends ItemView {
 
 	private canvasDimensions(): {width: number; height: number} {
 		const dpr = window.devicePixelRatio || 1;
-		return {
-			width: this.canvas.width / dpr,
-			height: this.canvas.height / dpr,
-		};
+		return {width: this.canvas.width / dpr, height: this.canvas.height / dpr};
 	}
 
-	private onClick = (evt: MouseEvent): void => {
+	private onCanvasClick = (evt: MouseEvent): void => {
 		const {x, y} = this.getCanvasCoords(evt);
 		const {width, height} = this.canvasDimensions();
-		const planet = hitTest(x, y, width, height, this.planets, this.currentTime());
-		if (planet) {
-			const file = this.app.vault.getAbstractFileByPath(planet.filePath);
-			if (file instanceof TFile) {
-				this.app.workspace.getLeaf(false).openFile(file);
+
+		if (this.mode === "starway") {
+			const star = starwayHitTest(x, y, width, height, this.starwayStars);
+			if (star) this.selectStar(star);
+		} else if (this.mode === "system") {
+			const planet = hitTest(x, y, width, height, this.planets, this.currentTime());
+			if (planet) {
+				const file = this.app.vault.getAbstractFileByPath(planet.filePath);
+				if (file instanceof TFile) {
+					this.app.workspace.getLeaf(false).openFile(file);
+				}
 			}
 		}
 	};
 
-	private onMouseMove = (evt: MouseEvent): void => {
+	private onCanvasMouseMove = (evt: MouseEvent): void => {
 		const {x, y} = this.getCanvasCoords(evt);
 		const {width, height} = this.canvasDimensions();
-		const planet = hitTest(x, y, width, height, this.planets, this.currentTime());
-		this.canvas.style.cursor = planet ? "pointer" : "";
+
+		if (this.mode === "starway") {
+			const star = starwayHitTest(x, y, width, height, this.starwayStars);
+			this.canvas.style.cursor = star ? "pointer" : "";
+		} else if (this.mode === "system") {
+			const planet = hitTest(x, y, width, height, this.planets, this.currentTime());
+			this.canvas.style.cursor = planet ? "pointer" : "";
+		}
 	};
+
+	private updateHeader(): void {
+		(this.leaf as unknown as {updateHeader(): void}).updateHeader();
+	}
 }

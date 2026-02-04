@@ -5,9 +5,10 @@ export interface StarData {
 	filePath: string;
 	color: string;
 	size: number;
+	starway: string;
 }
 
-export const STAR_DEFAULTS: Omit<StarData, "name" | "filePath"> = {
+export const STAR_DEFAULTS: Omit<StarData, "name" | "filePath" | "starway"> = {
 	color: "#ffeb3b",
 	size: 20,
 };
