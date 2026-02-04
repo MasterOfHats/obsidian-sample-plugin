@@ -1,7 +1,9 @@
-import {ItemView, TFile, WorkspaceLeaf, debounce, EventRef} from "obsidian";
+import {ItemView, TFile, WorkspaceLeaf, debounce, EventRef, setIcon} from "obsidian";
 import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, StarData, PLANET_DEFAULTS, STAR_DEFAULTS} from "../types";
 import {render, hitTest} from "./SolarSystemRenderer";
 import MyPlugin from "../main";
+
+type ViewMode = "picker" | "system";
 
 export class SolarSystemView extends ItemView {
 	private plugin: MyPlugin;
@@ -14,7 +16,7 @@ export class SolarSystemView extends ItemView {
 	private startTime = 0;
 	private resizeObserver: ResizeObserver | null = null;
 	private eventRefs: EventRef[] = [];
-	private dropdown: HTMLSelectElement;
+	private mode: ViewMode = "picker";
 
 	constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
 		super(leaf);
@@ -34,35 +36,23 @@ export class SolarSystemView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
-		const container = this.contentEl;
-		container.empty();
-		container.addClass("solar-system-container");
-
-		// Toolbar with star selector dropdown
-		const toolbar = container.createEl("div", {cls: "solar-system-toolbar"});
-		const label = toolbar.createEl("label", {text: "Star system: ", cls: "solar-system-label"});
-		this.dropdown = label.createEl("select", {cls: "solar-system-select"});
-		this.dropdown.addEventListener("change", () => {
-			this.onStarSelected(this.dropdown.value);
-		});
-
-		this.canvas = container.createEl("canvas", {cls: "solar-system-canvas"});
-		const ctx = this.canvas.getContext("2d");
-		if (!ctx) return;
-		this.ctx = ctx;
-
-		this.resizeCanvas();
-
-		this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
-		this.resizeObserver.observe(container);
-
-		this.canvas.addEventListener("click", this.onClick);
-		this.canvas.addEventListener("mousemove", this.onMouseMove);
-
 		this.loadStars();
-		this.startAnimation();
 
-		const debouncedReload = debounce(() => this.loadStars(), 150, true);
+		// If a star is already selected, go straight to system view
+		if (this.selectedStar) {
+			this.showSystem();
+		} else {
+			this.showPicker();
+		}
+
+		const debouncedReload = debounce(() => {
+			this.loadStars();
+			if (this.mode === "system") {
+				this.loadPlanets();
+			} else {
+				this.renderPicker();
+			}
+		}, 150, true);
 
 		this.eventRefs.push(
 			this.app.metadataCache.on("changed", (file) => {
@@ -100,12 +90,108 @@ export class SolarSystemView extends ItemView {
 	}
 
 	onResize(): void {
-		this.resizeCanvas();
+		if (this.mode === "system") {
+			this.resizeCanvas();
+		}
 	}
 
 	refresh(): void {
 		this.loadStars();
+		if (this.mode === "system") {
+			this.loadPlanets();
+			this.startAnimation();
+		} else {
+			this.renderPicker();
+		}
+	}
+
+	// ── Picker view ──────────────────────────────────────────
+
+	private showPicker(): void {
+		this.mode = "picker";
+		this.stopAnimation();
+		this.teardownSystemDOM();
+		this.renderPicker();
+	}
+
+	private renderPicker(): void {
+		const container = this.contentEl;
+		container.empty();
+		container.addClass("solar-system-container");
+
+		const picker = container.createEl("div", {cls: "solar-system-picker"});
+		picker.createEl("h2", {text: "Select a star system", cls: "solar-system-picker-title"});
+
+		if (this.stars.length === 0) {
+			picker.createEl("p", {text: "No stars found. Add files with LocationType: \"Star\" to your folder.", cls: "solar-system-picker-empty"});
+			return;
+		}
+
+		const list = picker.createEl("div", {cls: "solar-system-star-list"});
+		for (const star of this.stars) {
+			const item = list.createEl("button", {cls: "solar-system-star-item"});
+
+			const swatch = item.createEl("span", {cls: "solar-system-star-swatch"});
+			swatch.style.backgroundColor = star.color;
+
+			item.createEl("span", {text: star.name, cls: "solar-system-star-item-name"});
+
+			item.addEventListener("click", () => this.selectStar(star));
+		}
+	}
+
+	// ── System view ──────────────────────────────────────────
+
+	private showSystem(): void {
+		this.mode = "system";
+		this.buildSystemDOM();
+		this.loadPlanets();
 		this.startAnimation();
+	}
+
+	private buildSystemDOM(): void {
+		const container = this.contentEl;
+		container.empty();
+		container.addClass("solar-system-container");
+
+		// Back button toolbar
+		const toolbar = container.createEl("div", {cls: "solar-system-toolbar"});
+		const backBtn = toolbar.createEl("button", {cls: "solar-system-back-btn", attr: {"aria-label": "Back to star selection"}});
+		setIcon(backBtn, "arrow-left");
+		backBtn.createEl("span", {text: "Stars"});
+		backBtn.addEventListener("click", () => this.showPicker());
+
+		this.canvas = container.createEl("canvas", {cls: "solar-system-canvas"});
+		const ctx = this.canvas.getContext("2d");
+		if (!ctx) return;
+		this.ctx = ctx;
+
+		this.resizeCanvas();
+
+		this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
+		this.resizeObserver.observe(container);
+
+		this.canvas.addEventListener("click", this.onClick);
+		this.canvas.addEventListener("mousemove", this.onMouseMove);
+	}
+
+	private teardownSystemDOM(): void {
+		this.canvas?.removeEventListener("click", this.onClick);
+		this.canvas?.removeEventListener("mousemove", this.onMouseMove);
+		if (this.resizeObserver) {
+			this.resizeObserver.disconnect();
+			this.resizeObserver = null;
+		}
+	}
+
+	// ── Star / planet data ───────────────────────────────────
+
+	private async selectStar(star: StarData): Promise<void> {
+		this.selectedStar = star;
+		this.plugin.settings.selectedStar = star.name;
+		await this.plugin.saveData(this.plugin.settings);
+		(this.leaf as unknown as {updateHeader(): void}).updateHeader();
+		this.showSystem();
 	}
 
 	private isInFolder(file: TFile): boolean {
@@ -114,25 +200,12 @@ export class SolarSystemView extends ItemView {
 		return file.path.startsWith(folder + "/");
 	}
 
-	private resizeCanvas(): void {
-		const container = this.contentEl;
-		const dpr = window.devicePixelRatio || 1;
-		const width = container.clientWidth;
-		const height = container.clientHeight;
-		this.canvas.width = width * dpr;
-		this.canvas.height = height * dpr;
-		this.canvas.style.width = width + "px";
-		this.canvas.style.height = height + "px";
-		this.ctx?.scale(dpr, dpr);
-	}
-
 	private loadStars(): void {
 		const folder = this.plugin.settings.solarSystemFolder;
 		if (!folder) {
 			this.stars = [];
 			this.selectedStar = null;
 			this.planets = [];
-			this.populateDropdown();
 			return;
 		}
 
@@ -141,7 +214,6 @@ export class SolarSystemView extends ItemView {
 			this.stars = [];
 			this.selectedStar = null;
 			this.planets = [];
-			this.populateDropdown();
 			return;
 		}
 
@@ -174,12 +246,6 @@ export class SolarSystemView extends ItemView {
 		} else {
 			this.selectedStar = null;
 		}
-
-		this.populateDropdown();
-		this.loadPlanets();
-
-		// Update the leaf header title
-		(this.leaf as unknown as {updateHeader(): void}).updateHeader();
 	}
 
 	private loadPlanets(): void {
@@ -225,30 +291,18 @@ export class SolarSystemView extends ItemView {
 			});
 	}
 
-	private populateDropdown(): void {
-		this.dropdown.empty();
-		for (const star of this.stars) {
-			const opt = this.dropdown.createEl("option", {text: star.name, value: star.name});
-			if (this.selectedStar && star.name === this.selectedStar.name) {
-				opt.selected = true;
-			}
-		}
-		if (this.stars.length === 0) {
-			this.dropdown.createEl("option", {text: "(no stars found)", value: ""});
-			this.dropdown.disabled = true;
-		} else {
-			this.dropdown.disabled = false;
-		}
-	}
+	// ── Canvas helpers ───────────────────────────────────────
 
-	private async onStarSelected(name: string): Promise<void> {
-		const star = this.stars.find(s => s.name === name);
-		if (!star) return;
-		this.selectedStar = star;
-		this.plugin.settings.selectedStar = star.name;
-		await this.plugin.saveData(this.plugin.settings);
-		this.loadPlanets();
-		(this.leaf as unknown as {updateHeader(): void}).updateHeader();
+	private resizeCanvas(): void {
+		const container = this.contentEl;
+		const dpr = window.devicePixelRatio || 1;
+		const width = container.clientWidth;
+		const height = container.clientHeight;
+		this.canvas.width = width * dpr;
+		this.canvas.height = height * dpr;
+		this.canvas.style.width = width + "px";
+		this.canvas.style.height = height + "px";
+		this.ctx?.scale(dpr, dpr);
 	}
 
 	private numOrDefault(value: unknown, fallback: number): number {
@@ -256,6 +310,7 @@ export class SolarSystemView extends ItemView {
 	}
 
 	private startAnimation(): void {
+		this.stopAnimation();
 		this.startTime = performance.now() / 1000;
 		const frame = (): void => {
 			const time = performance.now() / 1000 - this.startTime;
