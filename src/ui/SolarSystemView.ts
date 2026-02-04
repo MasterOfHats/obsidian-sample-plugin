@@ -94,6 +94,7 @@ export class SolarSystemView extends ItemView {
 
 	refresh(): void {
 		this.loadPlanets();
+		this.startAnimation();
 	}
 
 	private isInFolder(file: TFile): boolean {
