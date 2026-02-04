@@ -1,5 +1,7 @@
 import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
 import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import {VIEW_TYPE_SOLAR_SYSTEM} from "./types";
+import {SolarSystemView} from "./ui/SolarSystemView";
 
 // Remember to rename these classes and interfaces!
 
@@ -8,6 +10,20 @@ export default class MyPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		this.registerView(VIEW_TYPE_SOLAR_SYSTEM, (leaf) => new SolarSystemView(leaf, this));
+
+		this.addRibbonIcon('sun', 'Open solar system', () => {
+			this.activateSolarSystemView();
+		});
+
+		this.addCommand({
+			id: 'open-solar-system',
+			name: 'Open solar system view',
+			callback: () => {
+				this.activateSolarSystemView();
+			}
+		});
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
@@ -71,6 +87,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	onunload() {
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_SOLAR_SYSTEM);
 	}
 
 	async loadSettings() {
@@ -79,6 +96,22 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		this.app.workspace.getLeavesOfType(VIEW_TYPE_SOLAR_SYSTEM).forEach(leaf => {
+			if (leaf.view instanceof SolarSystemView) {
+				leaf.view.refresh();
+			}
+		});
+	}
+
+	async activateSolarSystemView(): Promise<void> {
+		const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_SOLAR_SYSTEM);
+		if (existing.length > 0) {
+			this.app.workspace.revealLeaf(existing[0]!);
+			return;
+		}
+		const leaf = this.app.workspace.getLeaf('split');
+		await leaf.setViewState({type: VIEW_TYPE_SOLAR_SYSTEM, active: true});
+		this.app.workspace.revealLeaf(leaf);
 	}
 }
 
