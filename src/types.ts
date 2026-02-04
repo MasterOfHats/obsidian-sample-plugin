@@ -1,5 +1,17 @@
 export const VIEW_TYPE_SOLAR_SYSTEM = "solar-system-view";
 
+export interface StarData {
+	name: string;
+	filePath: string;
+	color: string;
+	size: number;
+}
+
+export const STAR_DEFAULTS: Omit<StarData, "name" | "filePath"> = {
+	color: "#ffeb3b",
+	size: 20,
+};
+
 export interface PlanetData {
 	name: string;
 	filePath: string;

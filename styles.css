@@ -12,10 +12,39 @@ If your plugin does not need CSS, delete this file.
 	height: 100%;
 	overflow: hidden;
 	background-color: #0a0a1a;
+	display: flex;
+	flex-direction: column;
+}
+
+.solar-system-toolbar {
+	flex-shrink: 0;
+	padding: 6px 12px;
+	background-color: #111122;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.solar-system-label {
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 13px;
+}
+
+.solar-system-select {
+	margin-left: 6px;
+	padding: 3px 8px;
+	background-color: #1a1a2e;
+	color: #ffffff;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.solar-system-select:hover {
+	border-color: rgba(255, 255, 255, 0.3);
 }
 
 .solar-system-canvas {
 	display: block;
-	width: 100%;
-	height: 100%;
+	flex: 1;
+	min-height: 0;
 }

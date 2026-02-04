@@ -1,5 +1,5 @@
 import {ItemView, TFile, WorkspaceLeaf, debounce, EventRef} from "obsidian";
-import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, PLANET_DEFAULTS} from "../types";
+import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, StarData, PLANET_DEFAULTS, STAR_DEFAULTS} from "../types";
 import {render, hitTest} from "./SolarSystemRenderer";
 import MyPlugin from "../main";
 
@@ -8,10 +8,13 @@ export class SolarSystemView extends ItemView {
 	private canvas: HTMLCanvasElement;
 	private ctx: CanvasRenderingContext2D;
 	private planets: PlanetData[] = [];
+	private stars: StarData[] = [];
+	private selectedStar: StarData | null = null;
 	private animFrameId: number | null = null;
 	private startTime = 0;
 	private resizeObserver: ResizeObserver | null = null;
 	private eventRefs: EventRef[] = [];
+	private dropdown: HTMLSelectElement;
 
 	constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
 		super(leaf);
@@ -23,7 +26,7 @@ export class SolarSystemView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return this.plugin.settings.starName || "Solar System";
+		return this.selectedStar?.name ?? "Solar System";
 	}
 
 	getIcon(): string {
@@ -34,6 +37,14 @@ export class SolarSystemView extends ItemView {
 		const container = this.contentEl;
 		container.empty();
 		container.addClass("solar-system-container");
+
+		// Toolbar with star selector dropdown
+		const toolbar = container.createEl("div", {cls: "solar-system-toolbar"});
+		const label = toolbar.createEl("label", {text: "Star system: ", cls: "solar-system-label"});
+		this.dropdown = label.createEl("select", {cls: "solar-system-select"});
+		this.dropdown.addEventListener("change", () => {
+			this.onStarSelected(this.dropdown.value);
+		});
 
 		this.canvas = container.createEl("canvas", {cls: "solar-system-canvas"});
 		const ctx = this.canvas.getContext("2d");
@@ -48,10 +59,10 @@ export class SolarSystemView extends ItemView {
 		this.canvas.addEventListener("click", this.onClick);
 		this.canvas.addEventListener("mousemove", this.onMouseMove);
 
-		this.loadPlanets();
+		this.loadStars();
 		this.startAnimation();
 
-		const debouncedReload = debounce(() => this.loadPlanets(), 150, true);
+		const debouncedReload = debounce(() => this.loadStars(), 150, true);
 
 		this.eventRefs.push(
 			this.app.metadataCache.on("changed", (file) => {
@@ -93,7 +104,7 @@ export class SolarSystemView extends ItemView {
 	}
 
 	refresh(): void {
-		this.loadPlanets();
+		this.loadStars();
 		this.startAnimation();
 	}
 
@@ -115,35 +126,129 @@ export class SolarSystemView extends ItemView {
 		this.ctx?.scale(dpr, dpr);
 	}
 
+	private loadStars(): void {
+		const folder = this.plugin.settings.solarSystemFolder;
+		if (!folder) {
+			this.stars = [];
+			this.selectedStar = null;
+			this.planets = [];
+			this.populateDropdown();
+			return;
+		}
+
+		const abstractFolder = this.app.vault.getAbstractFileByPath(folder);
+		if (!abstractFolder) {
+			this.stars = [];
+			this.selectedStar = null;
+			this.planets = [];
+			this.populateDropdown();
+			return;
+		}
+
+		const files = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folder + "/"));
+
+		this.stars = files
+			.filter(file => {
+				const cache = this.app.metadataCache.getFileCache(file);
+				const locationType = cache?.frontmatter?.LocationType;
+				return typeof locationType === "string" && locationType.toLowerCase() === "star";
+			})
+			.map(file => {
+				const cache = this.app.metadataCache.getFileCache(file);
+				const fm = cache?.frontmatter;
+				return {
+					name: file.basename,
+					filePath: file.path,
+					color: typeof fm?.star_color === "string" ? fm.star_color : STAR_DEFAULTS.color,
+					size: this.numOrDefault(fm?.star_size, STAR_DEFAULTS.size),
+				};
+			});
+
+		// Restore selection or default to first star
+		const savedName = this.plugin.settings.selectedStar;
+		const match = this.stars.find(s => s.name === savedName);
+		if (match) {
+			this.selectedStar = match;
+		} else if (this.stars.length > 0) {
+			this.selectedStar = this.stars[0]!;
+		} else {
+			this.selectedStar = null;
+		}
+
+		this.populateDropdown();
+		this.loadPlanets();
+
+		// Update the leaf header title
+		(this.leaf as unknown as {updateHeader(): void}).updateHeader();
+	}
+
 	private loadPlanets(): void {
+		if (!this.selectedStar) {
+			this.planets = [];
+			return;
+		}
+
 		const folder = this.plugin.settings.solarSystemFolder;
 		if (!folder) {
 			this.planets = [];
 			return;
 		}
 
-		const abstractFolder = this.app.vault.getAbstractFileByPath(folder);
-		if (!abstractFolder) {
-			this.planets = [];
-			return;
-		}
-
 		const files = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folder + "/"));
+		const starName = this.selectedStar.name;
 
-		this.planets = files.map(file => {
-			const cache = this.app.metadataCache.getFileCache(file);
-			const fm = cache?.frontmatter;
+		this.planets = files
+			.filter(file => {
+				const cache = this.app.metadataCache.getFileCache(file);
+				const fm = cache?.frontmatter;
+				const locationType = fm?.LocationType;
+				const locationParent = fm?.LocationParent;
+				return (
+					typeof locationType === "string" &&
+					locationType.toLowerCase() === "planet" &&
+					typeof locationParent === "string" &&
+					locationParent === starName
+				);
+			})
+			.map(file => {
+				const cache = this.app.metadataCache.getFileCache(file);
+				const fm = cache?.frontmatter;
+				return {
+					name: file.basename,
+					filePath: file.path,
+					orbitRadius: this.numOrDefault(fm?.orbit_radius, PLANET_DEFAULTS.orbitRadius),
+					size: this.numOrDefault(fm?.planet_size, PLANET_DEFAULTS.size),
+					color: typeof fm?.planet_color === "string" ? fm.planet_color : PLANET_DEFAULTS.color,
+					orbitSpeed: this.numOrDefault(fm?.orbit_speed, PLANET_DEFAULTS.orbitSpeed),
+					startAngle: this.numOrDefault(fm?.start_angle, PLANET_DEFAULTS.startAngle) * (Math.PI / 180),
+				};
+			});
+	}
 
-			return {
-				name: file.basename,
-				filePath: file.path,
-				orbitRadius: this.numOrDefault(fm?.orbit_radius, PLANET_DEFAULTS.orbitRadius),
-				size: this.numOrDefault(fm?.planet_size, PLANET_DEFAULTS.size),
-				color: typeof fm?.planet_color === "string" ? fm.planet_color : PLANET_DEFAULTS.color,
-				orbitSpeed: this.numOrDefault(fm?.orbit_speed, PLANET_DEFAULTS.orbitSpeed),
-				startAngle: this.numOrDefault(fm?.start_angle, PLANET_DEFAULTS.startAngle) * (Math.PI / 180),
-			};
-		});
+	private populateDropdown(): void {
+		this.dropdown.empty();
+		for (const star of this.stars) {
+			const opt = this.dropdown.createEl("option", {text: star.name, value: star.name});
+			if (this.selectedStar && star.name === this.selectedStar.name) {
+				opt.selected = true;
+			}
+		}
+		if (this.stars.length === 0) {
+			this.dropdown.createEl("option", {text: "(no stars found)", value: ""});
+			this.dropdown.disabled = true;
+		} else {
+			this.dropdown.disabled = false;
+		}
+	}
+
+	private async onStarSelected(name: string): Promise<void> {
+		const star = this.stars.find(s => s.name === name);
+		if (!star) return;
+		this.selectedStar = star;
+		this.plugin.settings.selectedStar = star.name;
+		await this.plugin.saveData(this.plugin.settings);
+		this.loadPlanets();
+		(this.leaf as unknown as {updateHeader(): void}).updateHeader();
 	}
 
 	private numOrDefault(value: unknown, fallback: number): number {
@@ -158,7 +263,7 @@ export class SolarSystemView extends ItemView {
 			const width = this.canvas.width / dpr;
 			const height = this.canvas.height / dpr;
 			this.ctx.save();
-			render(this.ctx, width, height, this.planets, time, this.plugin.settings.starName);
+			render(this.ctx, width, height, this.planets, time, this.selectedStar);
 			this.ctx.restore();
 			this.animFrameId = requestAnimationFrame(frame);
 		};

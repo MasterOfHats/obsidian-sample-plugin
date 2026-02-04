@@ -4,13 +4,13 @@ import MyPlugin from "./main";
 export interface MyPluginSettings {
 	mySetting: string;
 	solarSystemFolder: string;
-	starName: string;
+	selectedStar: string;
 }
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: 'default',
 	solarSystemFolder: '',
-	starName: 'Sol',
+	selectedStar: '',
 }
 
 export class SampleSettingTab extends PluginSettingTab {
@@ -48,15 +48,5 @@ export class SampleSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		new Setting(containerEl)
-			.setName('Star name')
-			.setDesc('Display name for the central star')
-			.addText(text => text
-				.setPlaceholder('Sol')
-				.setValue(this.plugin.settings.starName)
-				.onChange(async (value) => {
-					this.plugin.settings.starName = value;
-					await this.plugin.saveSettings();
-				}));
 	}
 }
