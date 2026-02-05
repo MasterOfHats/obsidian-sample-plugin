@@ -1,3 +1,4 @@
+import { randomInt } from "crypto";
 import {StarData} from "../types";
 import {STAR_DEFAULTS} from "../types";
 
@@ -25,6 +26,13 @@ function seededRandom(seed: number): () => number {
 		s ^= s << 5;
 		return (s >>> 0) / 0xFFFFFFFF;
 	};
+}
+
+function HashInt(i: number){
+	i = ((i >> 16) ^ i) *  0x45d9f3b;
+	i = ((i >> 16) ^ i) *  0x45d9f3b;
+	i = ((i >> 16) ^ i);
+	return i;
 }
 
 function computeStarPositions(
@@ -64,15 +72,16 @@ function computeStarPositions(
 	});
 
 	return starFilling.map((star, i) => {
-		const h = hash(star.name + star.position);
-		
-		const angle = (i / starFilling.length) * Math.PI * 2 - Math.PI / 2;
+		const h = hash(star.name) + HashInt(i)
 
-		const rVariation = 0.55 + (h % 45) / 100;
-		const r = radius * rVariation;
+		const distY = i * 0.2 * radius;
+		const distX = -radius + radius * (h % 100) / 50  ;
+		//const angle = (i / starFilling.length) * Math.PI * 2 - Math.PI / 2;
+		//const rVariation = 0.55 + (h % 45) / 100;
+		//const r = radius * rVariation;
 		return {
-			x: cx + Math.cos(angle) * r,
-			y: cy + Math.sin(angle) * r,
+			x: cx + distX, //cx + Math.cos(angle) * r,
+			y: cy + distY, //cy + Math.sin(angle) * r,
 			star,
 		};
 	});
