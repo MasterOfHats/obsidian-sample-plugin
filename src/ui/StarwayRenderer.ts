@@ -1,4 +1,5 @@
 import {StarData} from "../types";
+import {STAR_DEFAULTS} from "../types";
 
 interface StarPosition {
 	x: number;
@@ -41,10 +42,33 @@ function computeStarPositions(
 		return [{x: cx, y: cy, star: stars[0]!}];
 	}
 
-	return stars.map((star, i) => {
-		const angle = (i / stars.length) * Math.PI * 2 - Math.PI / 2;
-		const h = hash(star.name);
-		const rVariation = 0.55 + (h % 45) / 100; // 0.55 – 1.0
+
+
+	//Adding stars in between the defined ones, using the position value
+	let length = (stars.last()?.position ?? 1) - (stars.first()?.position ?? 0) + 1
+	let starFilling : StarData[] = new Array(length);
+	let FallbackStar: StarData = {
+	name: "",
+	filePath: "",
+	color: "#ffeb3b",
+	size: 20,
+	starway: "",
+	position: -1
+	}
+	starFilling.fill(FallbackStar);
+
+
+	starFilling.forEach((element, index) => {
+		starFilling[index] = stars.find( TestElement => TestElement.position == index + (stars.first()?.position ?? 0)) ?? FallbackStar;
+		starFilling[index].position = index + (stars.first()?.position ?? 0);
+	});
+
+	return starFilling.map((star, i) => {
+		const h = hash(star.name + star.position);
+		
+		const angle = (i / starFilling.length) * Math.PI * 2 - Math.PI / 2;
+
+		const rVariation = 0.55 + (h % 45) / 100;
 		const r = radius * rVariation;
 		return {
 			x: cx + Math.cos(angle) * r,
