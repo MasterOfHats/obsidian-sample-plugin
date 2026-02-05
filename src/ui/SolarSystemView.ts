@@ -273,9 +273,10 @@ export class SolarSystemView extends ItemView {
 				const cache = this.app.metadataCache.getFileCache(file);
 				const lt = cache?.frontmatter?.LocationType;
 				const sw = cache?.frontmatter?.Starway;
+				const pos = cache?.frontmatter?.SW_Position
 				return (
 					typeof lt === "string" && lt.toLowerCase() === "star" &&
-					typeof sw === "string" && sw.length > 0
+					typeof sw === "string" && sw.length > 0 && typeof pos === "number"
 				);
 			})
 			.map(file => {
@@ -287,6 +288,7 @@ export class SolarSystemView extends ItemView {
 					color: typeof fm?.star_color === "string" ? fm.star_color : STAR_DEFAULTS.color,
 					size: this.numOrDefault(fm?.star_size, STAR_DEFAULTS.size),
 					starway: fm!.Starway as string,
+					position: fm!.SW_Position as number
 				};
 			});
 
@@ -318,6 +320,7 @@ export class SolarSystemView extends ItemView {
 
 	private filterStarwayStars(): void {
 		this.starwayStars = this.allStars.filter(s => s.starway === this.selectedStarway);
+		this.starwayStars = this.starwayStars.sort( (a, b) => a.position - b.position)
 	}
 
 	private loadPlanets(): void {

@@ -6,11 +6,13 @@ export interface StarData {
 	color: string;
 	size: number;
 	starway: string;
+	position: number;
 }
 
 export const STAR_DEFAULTS: Omit<StarData, "name" | "filePath" | "starway"> = {
 	color: "#ffeb3b",
 	size: 20,
+	position: -1
 };
 
 export interface PlanetData {
