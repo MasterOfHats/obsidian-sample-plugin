@@ -41,7 +41,7 @@ function computeStarPositions(
 	stars: StarData[]
 ): StarPosition[] {
 	const cx = width / 2;
-	const cy = height / 2;
+	const cy = height / 4;
 	const margin = 80;
 	const radius = Math.min(cx, cy) - margin;
 
@@ -50,8 +50,6 @@ function computeStarPositions(
 		return [{x: cx, y: cy, star: stars[0]!}];
 	}
 
-
-
 	//Adding stars in between the defined ones, using the position value
 	let length = (stars.last()?.position ?? 1) - (stars.first()?.position ?? 0) + 1
 	let starFilling : StarData[] = new Array(length);
@@ -59,8 +57,8 @@ function computeStarPositions(
 	name: "",
 	filePath: "",
 	color: "#ffeb3b",
-	size: 20,
-	starway: "",
+	size: 14,
+	starway: stars.first()?.starway ?? "",
 	position: -1
 	}
 	starFilling.fill(FallbackStar);
@@ -72,7 +70,7 @@ function computeStarPositions(
 	});
 
 	return starFilling.map((star, i) => {
-		const h = hash(star.name) + HashInt(i)
+		const h = hash(star.name) + HashInt(i) + hash(star.starway)
 
 		const distY = i * 0.2 * radius;
 		const distX = -radius + radius * (h % 100) / 50  ;
