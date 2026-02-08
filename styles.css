@@ -80,17 +80,32 @@ If your plugin does not need CSS, delete this file.
 	font-size: 14px;
 }
 
-.starway-selector-dropdown {
+.starway-selector-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 	min-width: 200px;
-	padding: 6px 12px;
+}
+
+.starway-selector-btn {
+	padding: 8px 16px;
 	background-color: #1a1a2e;
-	color: #ffffff;
+	color: rgba(255, 255, 255, 0.85);
 	border: 1px solid rgba(255, 255, 255, 0.15);
 	border-radius: 4px;
 	font-size: 14px;
 	cursor: pointer;
+	text-align: left;
 }
 
-.starway-selector-dropdown:hover {
+.starway-selector-btn:hover {
+	background-color: #252545;
 	border-color: rgba(255, 255, 255, 0.3);
+	color: #ffffff;
+}
+
+.starway-selector-btn.is-active {
+	background-color: #2a2a5a;
+	border-color: rgba(140, 140, 255, 0.5);
+	color: #ffffff;
 }

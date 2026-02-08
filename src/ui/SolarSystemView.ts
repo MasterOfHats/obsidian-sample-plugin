@@ -144,15 +144,15 @@ export class SolarSystemView extends ItemView {
 			return;
 		}
 
-		const select = wrapper.createEl("select", {cls: "starway-selector-dropdown"});
-		select.createEl("option", {text: "-- choose --", value: ""});
+		const list = wrapper.createEl("div", {cls: "starway-selector-list"});
 		for (const name of this.starways) {
-			const opt = select.createEl("option", {text: name, value: name});
-			if (this.selectedStarway === name) opt.selected = true;
+			const btn = list.createEl("button", {
+				text: name,
+				cls: "starway-selector-btn",
+			});
+			if (this.selectedStarway === name) btn.addClass("is-active");
+			btn.addEventListener("click", () => this.selectStarway(name));
 		}
-		select.addEventListener("change", () => {
-			if (select.value) this.selectStarway(select.value);
-		});
 	}
 
 	// ── Starway view (constellation canvas) ──────────────────
