@@ -227,14 +227,12 @@ export class SolarSystemView extends ItemView {
 	}
 
 	private resizeCanvas(): void {
-		const container = this.contentEl;
 		const dpr = window.devicePixelRatio || 1;
-		const width = container.clientWidth;
-		const height = container.clientHeight;
-		this.canvas.width = width * dpr;
-		this.canvas.height = height * dpr;
-		this.canvas.style.width = width + "px";
-		this.canvas.style.height = height + "px";
+		// Use the canvas's actual laid-out size from CSS
+		const rect = this.canvas.getBoundingClientRect();
+		if (rect.width === 0 || rect.height === 0) return; // Not laid out yet
+		this.canvas.width = rect.width * dpr;
+		this.canvas.height = rect.height * dpr;
 		this.ctx?.scale(dpr, dpr);
 	}
 
@@ -393,9 +391,7 @@ export class SolarSystemView extends ItemView {
 		this.startTime = performance.now() / 1000;
 		const frame = (): void => {
 			const time = performance.now() / 1000 - this.startTime;
-			const dpr = window.devicePixelRatio || 1;
-			const width = this.canvas.width / dpr;
-			const height = this.canvas.height / dpr;
+			const {width, height} = this.canvasDimensions();
 			this.ctx.save();
 			if (this.mode === "starway") {
 				const virtualSize = this.getVirtualSize();
@@ -434,8 +430,8 @@ export class SolarSystemView extends ItemView {
 	}
 
 	private canvasDimensions(): {width: number; height: number} {
-		const dpr = window.devicePixelRatio || 1;
-		return {width: this.canvas.width / dpr, height: this.canvas.height / dpr};
+		const rect = this.canvas.getBoundingClientRect();
+		return {width: rect.width, height: rect.height};
 	}
 
 	private getVirtualSize(): {width: number; height: number} {
