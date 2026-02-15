@@ -162,7 +162,11 @@ export class SolarSystemView extends ItemView {
 		// Reset pan position for new starway view
 		this.panX = 0;
 		this.panY = 0;
-		this.buildCanvasDOM("Starways", () => this.showSelector());
+		this.buildCanvasDOM("Starways", () => this.showSelector(), {
+			label: "Add Star",
+			icon: "plus",
+			onAdd: () => this.createStar(),
+		});
 		this.canvas.style.cursor = "grab";
 		this.startAnimation();
 		this.updateHeader();
@@ -173,7 +177,11 @@ export class SolarSystemView extends ItemView {
 	private showSystem(): void {
 		this.mode = "system";
 		const label = this.selectedStarway ?? "Stars";
-		this.buildCanvasDOM(label, () => this.showStarway());
+		this.buildCanvasDOM(label, () => this.showStarway(), {
+			label: "Add Planet",
+			icon: "plus",
+			onAdd: () => this.createPlanet(),
+		});
 		this.loadPlanets();
 		this.startAnimation();
 		this.updateHeader();
@@ -181,7 +189,7 @@ export class SolarSystemView extends ItemView {
 
 	// ── Shared canvas DOM ────────────────────────────────────
 
-	private buildCanvasDOM(backLabel: string, onBack: () => void): void {
+	private buildCanvasDOM(backLabel: string, onBack: () => void, addOpts?: {label: string; icon: string; onAdd: () => void}): void {
 		this.teardownCanvas();
 
 		const container = this.contentEl;
@@ -196,6 +204,16 @@ export class SolarSystemView extends ItemView {
 		setIcon(backBtn, "arrow-left");
 		backBtn.createEl("span", {text: backLabel});
 		backBtn.addEventListener("click", onBack);
+
+		if (addOpts) {
+			const addBtn = toolbar.createEl("button", {
+				cls: "solar-system-add-btn",
+				attr: {"aria-label": addOpts.label},
+			});
+			setIcon(addBtn, addOpts.icon);
+			addBtn.createEl("span", {text: addOpts.label});
+			addBtn.addEventListener("click", addOpts.onAdd);
+		}
 
 		this.canvas = container.createEl("canvas", {cls: "solar-system-canvas"});
 		const ctx = this.canvas.getContext("2d");
@@ -253,6 +271,63 @@ export class SolarSystemView extends ItemView {
 		this.plugin.settings.selectedStar = star.name;
 		await this.plugin.saveData(this.plugin.settings);
 		this.showSystem();
+	}
+
+	// ── File creation ─────────────────────────────────────────
+
+	private async createStar(): Promise<void> {
+		const folder = this.plugin.settings.solarSystemFolder;
+		if (!folder || !this.selectedStarway) return;
+
+		const name = await this.uniqueName(folder, "New Star");
+		const lastPos = this.starwayStars.length > 0
+			? Math.max(...this.starwayStars.map(s => s.position))
+			: -1;
+		const content = [
+			"---",
+			"LocationType: Star",
+			`Starway: ${this.selectedStarway}`,
+			`SW_Position: ${lastPos + 1}`,
+			`star_color: "${STAR_DEFAULTS.color}"`,
+			`star_size: ${STAR_DEFAULTS.size}`,
+			"---",
+			"",
+		].join("\n");
+
+		const file = await this.app.vault.create(`${folder}/${name}.md`, content);
+		await this.app.workspace.getLeaf(false).openFile(file);
+	}
+
+	private async createPlanet(): Promise<void> {
+		const folder = this.plugin.settings.solarSystemFolder;
+		if (!folder || !this.selectedStar) return;
+
+		const name = await this.uniqueName(folder, "New Planet");
+		const content = [
+			"---",
+			"LocationType: Planet",
+			`LocationParent: ${this.selectedStar.name}`,
+			`orbit_radius: ${PLANET_DEFAULTS.orbitRadius}`,
+			`planet_size: ${PLANET_DEFAULTS.size}`,
+			`planet_color: "${PLANET_DEFAULTS.color}"`,
+			`orbit_speed: ${PLANET_DEFAULTS.orbitSpeed}`,
+			`start_angle: ${PLANET_DEFAULTS.startAngle}`,
+			"---",
+			"",
+		].join("\n");
+
+		const file = await this.app.vault.create(`${folder}/${name}.md`, content);
+		await this.app.workspace.getLeaf(false).openFile(file);
+	}
+
+	private async uniqueName(folder: string, base: string): Promise<string> {
+		let name = base;
+		let i = 1;
+		while (this.app.vault.getAbstractFileByPath(`${folder}/${name}.md`)) {
+			i++;
+			name = `${base} ${i}`;
+		}
+		return name;
 	}
 
 	// ── Data loading ─────────────────────────────────────────

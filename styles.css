@@ -23,6 +23,9 @@ If your plugin does not need CSS, delete this file.
 	padding: 6px 12px;
 	background-color: #111122;
 	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
 
 .solar-system-back-btn {
@@ -45,6 +48,30 @@ If your plugin does not need CSS, delete this file.
 }
 
 .solar-system-back-btn .svg-icon {
+	width: 14px;
+	height: 14px;
+}
+
+.solar-system-add-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	background: none;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 4px;
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.solar-system-add-btn:hover {
+	background-color: rgba(255, 255, 255, 0.06);
+	border-color: rgba(255, 255, 255, 0.3);
+	color: #ffffff;
+}
+
+.solar-system-add-btn .svg-icon {
 	width: 14px;
 	height: 14px;
 }
