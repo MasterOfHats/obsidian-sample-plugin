@@ -32,3 +32,21 @@ export const PLANET_DEFAULTS: Omit<PlanetData, "name" | "filePath"> = {
 	orbitSpeed: 0.5,
 	startAngle: 0,
 };
+
+export interface AsteroidData {
+	name: string;
+	filePath: string;
+	orbitRadius: number;
+	color: string;
+	orbitSpeed: number;
+	count: number;
+	spread: number;
+}
+
+export const ASTEROID_DEFAULTS: Omit<AsteroidData, "name" | "filePath"> = {
+	orbitRadius: 200,
+	color: "#8b7355",
+	orbitSpeed: 0.1,
+	count: 40,
+	spread: 15,
+};

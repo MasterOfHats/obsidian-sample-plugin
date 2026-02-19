@@ -1,6 +1,6 @@
 import {ItemView, TFile, WorkspaceLeaf, debounce, EventRef, setIcon} from "obsidian";
-import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, StarData, PLANET_DEFAULTS, STAR_DEFAULTS} from "../types";
-import {render, hitTest} from "./SolarSystemRenderer";
+import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, AsteroidData, StarData, PLANET_DEFAULTS, ASTEROID_DEFAULTS, STAR_DEFAULTS} from "../types";
+import {render, hitTest, HitResult} from "./SolarSystemRenderer";
 import {renderStarway, starwayHitTest} from "./StarwayRenderer";
 import MyPlugin from "../main";
 
@@ -11,6 +11,7 @@ export class SolarSystemView extends ItemView {
 	private canvas: HTMLCanvasElement;
 	private ctx: CanvasRenderingContext2D;
 	private planets: PlanetData[] = [];
+	private asteroids: AsteroidData[] = [];
 	private allStars: StarData[] = [];
 	private starwayStars: StarData[] = [];
 	private starways: string[] = [];
@@ -118,6 +119,7 @@ export class SolarSystemView extends ItemView {
 		if (this.selectedStarway) this.filterStarwayStars();
 		if (this.mode === "system") {
 			this.loadPlanets();
+			this.loadAsteroids();
 			this.startAnimation();
 		} else if (this.mode === "starway") {
 			this.startAnimation();
@@ -169,11 +171,11 @@ export class SolarSystemView extends ItemView {
 		// Reset pan position for new starway view
 		this.panX = 0;
 		this.panY = 0;
-		this.buildCanvasDOM("Starways", () => this.showSelector(), {
+		this.buildCanvasDOM("Starways", () => this.showSelector(), [{
 			label: "Add Star",
 			icon: "plus",
 			onAdd: () => this.createStar(),
-		});
+		}]);
 		this.canvas.style.cursor = "grab";
 		this.startAnimation();
 		this.updateHeader();
@@ -187,20 +189,20 @@ export class SolarSystemView extends ItemView {
 		this.systemPanY = 0;
 		this.systemZoom = 1;
 		const label = this.selectedStarway ?? "Stars";
-		this.buildCanvasDOM(label, () => this.showStarway(), {
-			label: "Add Planet",
-			icon: "plus",
-			onAdd: () => this.createPlanet(),
-		});
+		this.buildCanvasDOM(label, () => this.showStarway(), [
+			{label: "Add Planet", icon: "plus", onAdd: () => this.createPlanet()},
+			{label: "Add Asteroid", icon: "plus", onAdd: () => this.createAsteroid()},
+		]);
 		this.canvas.style.cursor = "grab";
 		this.loadPlanets();
+		this.loadAsteroids();
 		this.startAnimation();
 		this.updateHeader();
 	}
 
 	// ── Shared canvas DOM ────────────────────────────────────
 
-	private buildCanvasDOM(backLabel: string, onBack: () => void, addOpts?: {label: string; icon: string; onAdd: () => void}): void {
+	private buildCanvasDOM(backLabel: string, onBack: () => void, addButtons?: {label: string; icon: string; onAdd: () => void}[]): void {
 		this.teardownCanvas();
 
 		const container = this.contentEl;
@@ -216,14 +218,17 @@ export class SolarSystemView extends ItemView {
 		backBtn.createEl("span", {text: backLabel});
 		backBtn.addEventListener("click", onBack);
 
-		if (addOpts) {
-			const addBtn = toolbar.createEl("button", {
-				cls: "solar-system-add-btn",
-				attr: {"aria-label": addOpts.label},
-			});
-			setIcon(addBtn, addOpts.icon);
-			addBtn.createEl("span", {text: addOpts.label});
-			addBtn.addEventListener("click", addOpts.onAdd);
+		if (addButtons && addButtons.length > 0) {
+			const btnGroup = toolbar.createEl("div", {cls: "solar-system-btn-group"});
+			for (const opts of addButtons) {
+				const addBtn = btnGroup.createEl("button", {
+					cls: "solar-system-add-btn",
+					attr: {"aria-label": opts.label},
+				});
+				setIcon(addBtn, opts.icon);
+				addBtn.createEl("span", {text: opts.label});
+				addBtn.addEventListener("click", opts.onAdd);
+			}
 		}
 
 		this.canvas = container.createEl("canvas", {cls: "solar-system-canvas"});
@@ -325,6 +330,28 @@ export class SolarSystemView extends ItemView {
 			`planet_color: "${PLANET_DEFAULTS.color}"`,
 			`orbit_speed: ${PLANET_DEFAULTS.orbitSpeed}`,
 			`start_angle: ${PLANET_DEFAULTS.startAngle}`,
+			"---",
+			"",
+		].join("\n");
+
+		const file = await this.app.vault.create(`${folder}/${name}.md`, content);
+		await this.app.workspace.getLeaf(false).openFile(file);
+	}
+
+	private async createAsteroid(): Promise<void> {
+		const folder = this.plugin.settings.solarSystemFolder;
+		if (!folder || !this.selectedStar) return;
+
+		const name = await this.uniqueName(folder, "New Asteroid Field");
+		const content = [
+			"---",
+			"LocationType: Asteroid",
+			`LocationParent: ${this.selectedStar.name}`,
+			`orbit_radius: ${ASTEROID_DEFAULTS.orbitRadius}`,
+			`asteroid_color: "${ASTEROID_DEFAULTS.color}"`,
+			`orbit_speed: ${ASTEROID_DEFAULTS.orbitSpeed}`,
+			`asteroid_count: ${ASTEROID_DEFAULTS.count}`,
+			`asteroid_spread: ${ASTEROID_DEFAULTS.spread}`,
 			"---",
 			"",
 		].join("\n");
@@ -472,6 +499,49 @@ export class SolarSystemView extends ItemView {
 			});
 	}
 
+	private loadAsteroids(): void {
+		if (!this.selectedStar) {
+			this.asteroids = [];
+			return;
+		}
+
+		const folder = this.plugin.settings.solarSystemFolder;
+		if (!folder) {
+			this.asteroids = [];
+			return;
+		}
+
+		const files = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folder + "/"));
+		const starName = this.selectedStar.name;
+
+		this.asteroids = files
+			.filter(file => {
+				const cache = this.app.metadataCache.getFileCache(file);
+				const fm = cache?.frontmatter;
+				const locationType = fm?.LocationType;
+				const locationParent = fm?.LocationParent;
+				return (
+					typeof locationType === "string" &&
+					locationType.toLowerCase() === "asteroid" &&
+					typeof locationParent === "string" &&
+					locationParent === starName
+				);
+			})
+			.map(file => {
+				const cache = this.app.metadataCache.getFileCache(file);
+				const fm = cache?.frontmatter;
+				return {
+					name: file.basename,
+					filePath: file.path,
+					orbitRadius: this.numOrDefault(fm?.orbit_radius, ASTEROID_DEFAULTS.orbitRadius),
+					color: typeof fm?.asteroid_color === "string" ? fm.asteroid_color : ASTEROID_DEFAULTS.color,
+					orbitSpeed: this.numOrDefault(fm?.orbit_speed, ASTEROID_DEFAULTS.orbitSpeed),
+					count: this.numOrDefault(fm?.asteroid_count, ASTEROID_DEFAULTS.count),
+					spread: this.numOrDefault(fm?.asteroid_spread, ASTEROID_DEFAULTS.spread),
+				};
+			});
+	}
+
 	// ── Animation ────────────────────────────────────────────
 
 	private startAnimation(): void {
@@ -491,7 +561,7 @@ export class SolarSystemView extends ItemView {
 				this.ctx.clearRect(0, 0, width, height);
 				this.ctx.translate(width / 2 - this.systemPanX, height / 2 - this.systemPanY);
 				this.ctx.scale(this.systemZoom, this.systemZoom);
-				render(this.ctx, this.planets, time, this.selectedStar);
+				render(this.ctx, this.planets, this.asteroids, time, this.selectedStar);
 			}
 			this.ctx.restore();
 			this.animFrameId = requestAnimationFrame(frame);
@@ -577,9 +647,9 @@ export class SolarSystemView extends ItemView {
 			if (star) this.selectStar(star);
 		} else if (this.mode === "system") {
 			const {wx, wy} = this.screenToWorld(x, y);
-			const planet = hitTest(wx, wy, this.planets, this.currentTime());
-			if (planet) {
-				const file = this.app.vault.getAbstractFileByPath(planet.filePath);
+			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.currentTime());
+			if (hit) {
+				const file = this.app.vault.getAbstractFileByPath(hit.data.filePath);
 				if (file instanceof TFile) {
 					this.app.workspace.getLeaf(false).openFile(file);
 				}
@@ -618,8 +688,8 @@ export class SolarSystemView extends ItemView {
 			this.canvas.style.cursor = star ? "pointer" : "grab";
 		} else if (this.mode === "system") {
 			const {wx, wy} = this.screenToWorld(x, y);
-			const planet = hitTest(wx, wy, this.planets, this.currentTime());
-			this.canvas.style.cursor = planet ? "pointer" : "grab";
+			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.currentTime());
+			this.canvas.style.cursor = hit ? "pointer" : "grab";
 		}
 	};
 

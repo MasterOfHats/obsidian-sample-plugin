@@ -1,4 +1,4 @@
-import {PlanetData, StarData, STAR_DEFAULTS} from "../types";
+import {PlanetData, AsteroidData, StarData, STAR_DEFAULTS} from "../types";
 
 interface PlanetPosition {
 	x: number;
@@ -25,9 +25,30 @@ function computePositions(
  * The caller should apply canvas transforms (translate/scale) for pan/zoom
  * and clear the canvas before calling this function.
  */
+/** Simple deterministic hash for stable asteroid placement. */
+function hash(s: string): number {
+	let h = 0;
+	for (let i = 0; i < s.length; i++) {
+		h = (h * 31 + s.charCodeAt(i)) | 0;
+	}
+	return Math.abs(h);
+}
+
+/** Seeded pseudo-random (xorshift32). */
+function seededRandom(seed: number): () => number {
+	let s = seed | 0 || 1;
+	return () => {
+		s ^= s << 13;
+		s ^= s >> 17;
+		s ^= s << 5;
+		return (s >>> 0) / 0xFFFFFFFF;
+	};
+}
+
 export function render(
 	ctx: CanvasRenderingContext2D,
 	planets: PlanetData[],
+	asteroids: AsteroidData[],
 	time: number,
 	star: StarData | null
 ): void {
@@ -35,13 +56,42 @@ export function render(
 	const starRadius = star?.size ?? STAR_DEFAULTS.size;
 	const starName = star?.name ?? "Star";
 
-	// Orbit rings
+	// Orbit rings for planets
 	ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
 	ctx.lineWidth = 1;
 	for (const planet of planets) {
 		ctx.beginPath();
 		ctx.arc(0, 0, planet.orbitRadius, 0, Math.PI * 2);
 		ctx.stroke();
+	}
+
+	// Asteroid belts
+	for (const belt of asteroids) {
+		const rand = seededRandom(hash(belt.name));
+		const rotation = belt.orbitSpeed * time;
+		for (let i = 0; i < belt.count; i++) {
+			const angle = rand() * Math.PI * 2 + rotation;
+			const rOffset = (rand() - 0.5) * 2 * belt.spread;
+			const r = belt.orbitRadius + rOffset;
+			const size = rand() * 1.5 + 0.8;
+			const ax = Math.cos(angle) * r;
+			const ay = Math.sin(angle) * r;
+
+			ctx.fillStyle = hexToRgba(belt.color, 0.5 + rand() * 0.4);
+			ctx.beginPath();
+			ctx.arc(ax, ay, size, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		// Belt label at the top of the orbit
+		const labelAngle = -Math.PI / 2 + rotation * 0.1;
+		const lx = Math.cos(labelAngle) * belt.orbitRadius;
+		const ly = Math.sin(labelAngle) * belt.orbitRadius;
+		ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+		ctx.font = "11px sans-serif";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "bottom";
+		ctx.fillText(belt.name, lx, ly - belt.spread - 4);
 	}
 
 	// Star — derive gradient from the star's color
@@ -104,23 +154,40 @@ function darkenColor(hex: string, factor: number): string {
 	return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
+/** Hit result — either a planet or an asteroid belt. */
+export type HitResult =
+	| {type: "planet"; data: PlanetData}
+	| {type: "asteroid"; data: AsteroidData};
+
 /**
  * Hit-tests in world coordinates (origin at star centre).
+ * Checks planets first, then asteroid belts.
  */
 export function hitTest(
 	worldX: number,
 	worldY: number,
 	planets: PlanetData[],
+	asteroids: AsteroidData[],
 	time: number
-): PlanetData | null {
+): HitResult | null {
+	// Planets
 	const positions = computePositions(planets, time);
 	for (const pos of positions) {
 		const dx = worldX - pos.x;
 		const dy = worldY - pos.y;
 		const hitRadius = Math.max(pos.planet.size, 8) + 4;
 		if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-			return pos.planet;
+			return {type: "planet", data: pos.planet};
 		}
 	}
+
+	// Asteroid belts — hit if the click falls within the band
+	const dist = Math.sqrt(worldX * worldX + worldY * worldY);
+	for (const belt of asteroids) {
+		if (Math.abs(dist - belt.orbitRadius) <= belt.spread + 4) {
+			return {type: "asteroid", data: belt};
+		}
+	}
+
 	return null;
 }

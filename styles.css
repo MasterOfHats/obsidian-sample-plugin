@@ -52,6 +52,11 @@ If your plugin does not need CSS, delete this file.
 	height: 14px;
 }
 
+.solar-system-btn-group {
+	display: flex;
+	gap: 6px;
+}
+
 .solar-system-add-btn {
 	display: inline-flex;
 	align-items: center;
