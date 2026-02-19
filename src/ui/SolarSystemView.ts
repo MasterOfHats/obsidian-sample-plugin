@@ -25,6 +25,13 @@ export class SolarSystemView extends ItemView {
 	// Pan/scroll state for starway view
 	private panX = 0;
 	private panY = 0;
+
+	// Pan/zoom state for system view
+	private systemPanX = 0;
+	private systemPanY = 0;
+	private systemZoom = 1;
+
+	// Shared drag state
 	private isDragging = false;
 	private didDrag = false;  // True if mouse moved significantly during drag
 	private dragStartX = 0;
@@ -176,12 +183,16 @@ export class SolarSystemView extends ItemView {
 
 	private showSystem(): void {
 		this.mode = "system";
+		this.systemPanX = 0;
+		this.systemPanY = 0;
+		this.systemZoom = 1;
 		const label = this.selectedStarway ?? "Stars";
 		this.buildCanvasDOM(label, () => this.showStarway(), {
 			label: "Add Planet",
 			icon: "plus",
 			onAdd: () => this.createPlanet(),
 		});
+		this.canvas.style.cursor = "grab";
 		this.loadPlanets();
 		this.startAnimation();
 		this.updateHeader();
@@ -229,6 +240,7 @@ export class SolarSystemView extends ItemView {
 		this.canvas.addEventListener("mousedown", this.onCanvasMouseDown);
 		this.canvas.addEventListener("mouseup", this.onCanvasMouseUp);
 		this.canvas.addEventListener("mouseleave", this.onCanvasMouseUp);
+		this.canvas.addEventListener("wheel", this.onCanvasWheel, {passive: false});
 	}
 
 	private teardownCanvas(): void {
@@ -238,6 +250,7 @@ export class SolarSystemView extends ItemView {
 		this.canvas?.removeEventListener("mousedown", this.onCanvasMouseDown);
 		this.canvas?.removeEventListener("mouseup", this.onCanvasMouseUp);
 		this.canvas?.removeEventListener("mouseleave", this.onCanvasMouseUp);
+		this.canvas?.removeEventListener("wheel", this.onCanvasWheel);
 		if (this.resizeObserver) {
 			this.resizeObserver.disconnect();
 			this.resizeObserver = null;
@@ -474,7 +487,11 @@ export class SolarSystemView extends ItemView {
 				this.ctx.translate(-this.panX, -this.panY);
 				renderStarway(this.ctx, virtualSize.width, virtualSize.height, this.starwayStars, time, this.selectedStarway ?? "");
 			} else {
-				render(this.ctx, width, height, this.planets, time, this.selectedStar);
+				// Clear in screen space, then apply zoom/pan
+				this.ctx.clearRect(0, 0, width, height);
+				this.ctx.translate(width / 2 - this.systemPanX, height / 2 - this.systemPanY);
+				this.ctx.scale(this.systemZoom, this.systemZoom);
+				render(this.ctx, this.planets, time, this.selectedStar);
 			}
 			this.ctx.restore();
 			this.animFrameId = requestAnimationFrame(frame);
@@ -507,6 +524,15 @@ export class SolarSystemView extends ItemView {
 	private canvasDimensions(): {width: number; height: number} {
 		const rect = this.canvas.getBoundingClientRect();
 		return {width: rect.width, height: rect.height};
+	}
+
+	/** Convert screen-space canvas coordinates to world coordinates for the system view. */
+	private screenToWorld(screenX: number, screenY: number): {wx: number; wy: number} {
+		const {width, height} = this.canvasDimensions();
+		return {
+			wx: (screenX - width / 2 + this.systemPanX) / this.systemZoom,
+			wy: (screenY - height / 2 + this.systemPanY) / this.systemZoom,
+		};
 	}
 
 	private getVirtualSize(): {width: number; height: number} {
@@ -550,7 +576,8 @@ export class SolarSystemView extends ItemView {
 			const star = starwayHitTest(x + this.panX, y + this.panY, virtualSize.width, virtualSize.height, this.starwayStars);
 			if (star) this.selectStar(star);
 		} else if (this.mode === "system") {
-			const planet = hitTest(x, y, width, height, this.planets, this.currentTime());
+			const {wx, wy} = this.screenToWorld(x, y);
+			const planet = hitTest(wx, wy, this.planets, this.currentTime());
 			if (planet) {
 				const file = this.app.vault.getAbstractFileByPath(planet.filePath);
 				if (file instanceof TFile) {
@@ -565,7 +592,7 @@ export class SolarSystemView extends ItemView {
 		const {width, height} = this.canvasDimensions();
 
 		// Handle dragging for pan
-		if (this.isDragging && this.mode === "starway") {
+		if (this.isDragging) {
 			const dx = evt.clientX - this.dragStartX;
 			const dy = evt.clientY - this.dragStartY;
 
@@ -574,11 +601,14 @@ export class SolarSystemView extends ItemView {
 				this.didDrag = true;
 			}
 
-			const virtualSize = this.getVirtualSize();
-
-			// Update pan with bounds checking
-			this.panX = Math.max(0, Math.min(virtualSize.width - width, this.dragStartPanX - dx));
-			this.panY = Math.max(0, Math.min(virtualSize.height - height, this.dragStartPanY - dy));
+			if (this.mode === "starway") {
+				const virtualSize = this.getVirtualSize();
+				this.panX = Math.max(0, Math.min(virtualSize.width - width, this.dragStartPanX - dx));
+				this.panY = Math.max(0, Math.min(virtualSize.height - height, this.dragStartPanY - dy));
+			} else if (this.mode === "system") {
+				this.systemPanX = this.dragStartPanX - dx;
+				this.systemPanY = this.dragStartPanY - dy;
+			}
 			return;
 		}
 
@@ -587,19 +617,20 @@ export class SolarSystemView extends ItemView {
 			const star = starwayHitTest(x + this.panX, y + this.panY, virtualSize.width, virtualSize.height, this.starwayStars);
 			this.canvas.style.cursor = star ? "pointer" : "grab";
 		} else if (this.mode === "system") {
-			const planet = hitTest(x, y, width, height, this.planets, this.currentTime());
-			this.canvas.style.cursor = planet ? "pointer" : "";
+			const {wx, wy} = this.screenToWorld(x, y);
+			const planet = hitTest(wx, wy, this.planets, this.currentTime());
+			this.canvas.style.cursor = planet ? "pointer" : "grab";
 		}
 	};
 
 	private onCanvasMouseDown = (evt: MouseEvent): void => {
-		if (this.mode === "starway") {
+		if (this.mode === "starway" || this.mode === "system") {
 			this.isDragging = true;
 			this.didDrag = false;
 			this.dragStartX = evt.clientX;
 			this.dragStartY = evt.clientY;
-			this.dragStartPanX = this.panX;
-			this.dragStartPanY = this.panY;
+			this.dragStartPanX = this.mode === "system" ? this.systemPanX : this.panX;
+			this.dragStartPanY = this.mode === "system" ? this.systemPanY : this.panY;
 			this.canvas.style.cursor = "grabbing";
 		}
 	};
@@ -609,6 +640,27 @@ export class SolarSystemView extends ItemView {
 			this.isDragging = false;
 			this.canvas.style.cursor = "grab";
 		}
+	};
+
+	private onCanvasWheel = (evt: WheelEvent): void => {
+		if (this.mode !== "system") return;
+		evt.preventDefault();
+
+		const {x, y} = this.getCanvasCoords(evt);
+		const {width, height} = this.canvasDimensions();
+
+		// World position under the cursor before zoom
+		const worldX = (x - width / 2 + this.systemPanX) / this.systemZoom;
+		const worldY = (y - height / 2 + this.systemPanY) / this.systemZoom;
+
+		// Adjust zoom
+		const zoomFactor = evt.deltaY < 0 ? 1.1 : 1 / 1.1;
+		const newZoom = Math.max(0.1, Math.min(10, this.systemZoom * zoomFactor));
+
+		// Adjust pan so the world point under the cursor stays in place
+		this.systemPanX = worldX * newZoom - x + width / 2;
+		this.systemPanY = worldY * newZoom - y + height / 2;
+		this.systemZoom = newZoom;
 	};
 
 	private updateHeader(): void {
