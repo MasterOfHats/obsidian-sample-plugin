@@ -1,7 +1,7 @@
 import {ItemView, TFile, WorkspaceLeaf, debounce, EventRef, setIcon} from "obsidian";
 import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, AsteroidData, StarData, PLANET_DEFAULTS, ASTEROID_DEFAULTS, STAR_DEFAULTS} from "../types";
 import {render, hitTest, HitResult} from "./SolarSystemRenderer";
-import {renderStarway, starwayHitTest} from "./StarwayRenderer";
+import {renderStarway, starwayHitTest, connectionHitTest, computeStarPositions} from "./StarwayRenderer";
 import MyPlugin from "../main";
 
 type ViewMode = "selector" | "starway" | "system";
@@ -12,6 +12,8 @@ export class SolarSystemView extends ItemView {
 	private ctx: CanvasRenderingContext2D;
 	private planets: PlanetData[] = [];
 	private asteroids: AsteroidData[] = [];
+	private moons: Map<string, PlanetData[]> = new Map();
+	private planetAsteroids: Map<string, AsteroidData[]> = new Map();
 	private allStars: StarData[] = [];
 	private starwayStars: StarData[] = [];
 	private starways: string[] = [];
@@ -119,6 +121,7 @@ export class SolarSystemView extends ItemView {
 		if (this.selectedStarway) this.filterStarwayStars();
 		if (this.mode === "system") {
 			this.loadPlanets();
+			this.loadMoons();
 			this.loadAsteroids();
 			this.startAnimation();
 		} else if (this.mode === "starway") {
@@ -195,6 +198,7 @@ export class SolarSystemView extends ItemView {
 		]);
 		this.canvas.style.cursor = "grab";
 		this.loadPlanets();
+		this.loadMoons();
 		this.loadAsteroids();
 		this.startAnimation();
 		this.updateHeader();
@@ -282,6 +286,26 @@ export class SolarSystemView extends ItemView {
 		await this.plugin.saveData(this.plugin.settings);
 		this.filterStarwayStars();
 		this.showStarway();
+	}
+
+	private async navigateToStarway(starwayName: string, targetStarName: string): Promise<void> {
+		this.selectedStarway = starwayName;
+		this.selectedStar = null;
+		this.plugin.settings.selectedStarway = starwayName;
+		this.plugin.settings.selectedStar = "";
+		await this.plugin.saveData(this.plugin.settings);
+		this.filterStarwayStars();
+		this.showStarway();
+
+		// Scroll so the target star is visible
+		const {width, height} = this.canvasDimensions();
+		const virtualSize = this.getVirtualSize();
+		const positions = computeStarPositions(virtualSize.width, virtualSize.height, this.starwayStars);
+		const target = positions.find(p => p.star.name === targetStarName);
+		if (target) {
+			// Centre the target star vertically in the viewport
+			this.panY = Math.max(0, Math.min(virtualSize.height - height, target.y - height / 2));
+		}
 	}
 
 	private async selectStar(star: StarData): Promise<void> {
@@ -415,15 +439,28 @@ export class SolarSystemView extends ItemView {
 			.map(file => {
 				const cache = this.app.metadataCache.getFileCache(file);
 				const fm = cache?.frontmatter;
+				const ct = fm?.connect_to;
 				return {
 					name: file.basename,
 					filePath: file.path,
 					color: typeof fm?.star_color === "string" ? fm.star_color : STAR_DEFAULTS.color,
 					size: this.numOrDefault(fm?.star_size, STAR_DEFAULTS.size),
 					starway: fm!.Starway as string,
-					position: fm!.SW_Position as number
+					position: fm!.SW_Position as number,
+					connectTo: typeof ct === "string" && ct.length > 0 ? ct : undefined,
 				};
 			});
+
+		// Resolve connect_to targets (look up which starway the target star belongs to)
+		const starByName = new Map(this.allStars.map(s => [s.name, s]));
+		for (const star of this.allStars) {
+			if (star.connectTo) {
+				const target = starByName.get(star.connectTo);
+				if (target) {
+					star.connectToStarway = target.starway;
+				}
+			}
+		}
 
 		// Collect unique starway names, sorted alphabetically
 		const swSet = new Set(this.allStars.map(s => s.starway));
@@ -499,47 +536,93 @@ export class SolarSystemView extends ItemView {
 			});
 	}
 
-	private loadAsteroids(): void {
-		if (!this.selectedStar) {
-			this.asteroids = [];
-			return;
-		}
+	private loadMoons(): void {
+		this.moons = new Map();
+		if (this.planets.length === 0) return;
 
 		const folder = this.plugin.settings.solarSystemFolder;
-		if (!folder) {
-			this.asteroids = [];
-			return;
+		if (!folder) return;
+
+		const planetNames = new Set(this.planets.map(p => p.name));
+		const files = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folder + "/"));
+
+		for (const file of files) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const fm = cache?.frontmatter;
+			if (!fm) continue;
+			const locationType = fm.LocationType;
+			const locationParent = fm.LocationParent;
+			if (
+				typeof locationType !== "string" ||
+				locationType.toLowerCase() !== "planet" ||
+				typeof locationParent !== "string" ||
+				!planetNames.has(locationParent)
+			) continue;
+
+			const moon: PlanetData = {
+				name: file.basename,
+				filePath: file.path,
+				orbitRadius: this.numOrDefault(fm.orbit_radius, PLANET_DEFAULTS.orbitRadius),
+				size: this.numOrDefault(fm.planet_size, PLANET_DEFAULTS.size),
+				color: typeof fm.planet_color === "string" ? fm.planet_color : PLANET_DEFAULTS.color,
+				orbitSpeed: this.numOrDefault(fm.orbit_speed, PLANET_DEFAULTS.orbitSpeed),
+				startAngle: this.numOrDefault(fm.start_angle, PLANET_DEFAULTS.startAngle) * (Math.PI / 180),
+			};
+
+			const existing = this.moons.get(locationParent);
+			if (existing) {
+				existing.push(moon);
+			} else {
+				this.moons.set(locationParent, [moon]);
+			}
 		}
+	}
+
+	private loadAsteroids(): void {
+		this.asteroids = [];
+		this.planetAsteroids = new Map();
+		if (!this.selectedStar) return;
+
+		const folder = this.plugin.settings.solarSystemFolder;
+		if (!folder) return;
 
 		const files = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folder + "/"));
 		const starName = this.selectedStar.name;
+		const planetNames = new Set(this.planets.map(p => p.name));
 
-		this.asteroids = files
-			.filter(file => {
-				const cache = this.app.metadataCache.getFileCache(file);
-				const fm = cache?.frontmatter;
-				const locationType = fm?.LocationType;
-				const locationParent = fm?.LocationParent;
-				return (
-					typeof locationType === "string" &&
-					locationType.toLowerCase() === "asteroid" &&
-					typeof locationParent === "string" &&
-					locationParent === starName
-				);
-			})
-			.map(file => {
-				const cache = this.app.metadataCache.getFileCache(file);
-				const fm = cache?.frontmatter;
-				return {
-					name: file.basename,
-					filePath: file.path,
-					orbitRadius: this.numOrDefault(fm?.orbit_radius, ASTEROID_DEFAULTS.orbitRadius),
-					color: typeof fm?.asteroid_color === "string" ? fm.asteroid_color : ASTEROID_DEFAULTS.color,
-					orbitSpeed: this.numOrDefault(fm?.orbit_speed, ASTEROID_DEFAULTS.orbitSpeed),
-					count: this.numOrDefault(fm?.asteroid_count, ASTEROID_DEFAULTS.count),
-					spread: this.numOrDefault(fm?.asteroid_spread, ASTEROID_DEFAULTS.spread),
-				};
-			});
+		for (const file of files) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const fm = cache?.frontmatter;
+			if (!fm) continue;
+			const locationType = fm.LocationType;
+			const locationParent = fm.LocationParent;
+			if (
+				typeof locationType !== "string" ||
+				locationType.toLowerCase() !== "asteroid" ||
+				typeof locationParent !== "string"
+			) continue;
+
+			const belt: AsteroidData = {
+				name: file.basename,
+				filePath: file.path,
+				orbitRadius: this.numOrDefault(fm.orbit_radius, ASTEROID_DEFAULTS.orbitRadius),
+				color: typeof fm.asteroid_color === "string" ? fm.asteroid_color : ASTEROID_DEFAULTS.color,
+				orbitSpeed: this.numOrDefault(fm.orbit_speed, ASTEROID_DEFAULTS.orbitSpeed),
+				count: this.numOrDefault(fm.asteroid_count, ASTEROID_DEFAULTS.count),
+				spread: this.numOrDefault(fm.asteroid_spread, ASTEROID_DEFAULTS.spread),
+			};
+
+			if (locationParent === starName) {
+				this.asteroids.push(belt);
+			} else if (planetNames.has(locationParent)) {
+				const existing = this.planetAsteroids.get(locationParent);
+				if (existing) {
+					existing.push(belt);
+				} else {
+					this.planetAsteroids.set(locationParent, [belt]);
+				}
+			}
+		}
 	}
 
 	// ── Animation ────────────────────────────────────────────
@@ -561,7 +644,7 @@ export class SolarSystemView extends ItemView {
 				this.ctx.clearRect(0, 0, width, height);
 				this.ctx.translate(width / 2 - this.systemPanX, height / 2 - this.systemPanY);
 				this.ctx.scale(this.systemZoom, this.systemZoom);
-				render(this.ctx, this.planets, this.asteroids, time, this.selectedStar);
+				render(this.ctx, this.planets, this.asteroids, this.moons, this.planetAsteroids, time, this.selectedStar);
 			}
 			this.ctx.restore();
 			this.animFrameId = requestAnimationFrame(frame);
@@ -642,12 +725,23 @@ export class SolarSystemView extends ItemView {
 
 		if (this.mode === "starway") {
 			const virtualSize = this.getVirtualSize();
-			// Adjust click coordinates for pan offset
-			const star = starwayHitTest(x + this.panX, y + this.panY, virtualSize.width, virtualSize.height, this.starwayStars);
-			if (star) this.selectStar(star);
+			const px = x + this.panX;
+			const py = y + this.panY;
+			// Check star hits first
+			const star = starwayHitTest(px, py, virtualSize.width, virtualSize.height, this.starwayStars);
+			if (star) {
+				this.selectStar(star);
+				return;
+			}
+			// Check connection line hits
+			const conn = connectionHitTest(px, py, virtualSize.width, virtualSize.height, this.starwayStars);
+			if (conn) {
+				this.navigateToStarway(conn.connectToStarway, conn.connectTo);
+				return;
+			}
 		} else if (this.mode === "system") {
 			const {wx, wy} = this.screenToWorld(x, y);
-			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.currentTime());
+			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.moons, this.planetAsteroids, this.currentTime());
 			if (hit) {
 				const file = this.app.vault.getAbstractFileByPath(hit.data.filePath);
 				if (file instanceof TFile) {
@@ -684,11 +778,14 @@ export class SolarSystemView extends ItemView {
 
 		if (this.mode === "starway") {
 			const virtualSize = this.getVirtualSize();
-			const star = starwayHitTest(x + this.panX, y + this.panY, virtualSize.width, virtualSize.height, this.starwayStars);
-			this.canvas.style.cursor = star ? "pointer" : "grab";
+			const px = x + this.panX;
+			const py = y + this.panY;
+			const star = starwayHitTest(px, py, virtualSize.width, virtualSize.height, this.starwayStars);
+			const conn = !star && connectionHitTest(px, py, virtualSize.width, virtualSize.height, this.starwayStars);
+			this.canvas.style.cursor = (star || conn) ? "pointer" : "grab";
 		} else if (this.mode === "system") {
 			const {wx, wy} = this.screenToWorld(x, y);
-			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.currentTime());
+			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.moons, this.planetAsteroids, this.currentTime());
 			this.canvas.style.cursor = hit ? "pointer" : "grab";
 		}
 	};

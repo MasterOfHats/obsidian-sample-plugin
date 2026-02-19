@@ -7,6 +7,8 @@ export interface StarData {
 	size: number;
 	starway: string;
 	position: number;
+	connectTo?: string;
+	connectToStarway?: string;
 }
 
 export const STAR_DEFAULTS: Omit<StarData, "name" | "filePath" | "starway"> = {

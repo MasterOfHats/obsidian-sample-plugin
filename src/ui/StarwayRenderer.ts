@@ -2,7 +2,7 @@ import { randomInt } from "crypto";
 import {StarData} from "../types";
 import {STAR_DEFAULTS} from "../types";
 
-interface StarPosition {
+export interface StarPosition {
 	x: number;
 	y: number;
 	star: StarData;
@@ -35,7 +35,7 @@ function HashInt(i: number){
 	return i;
 }
 
-function computeStarPositions(
+export function computeStarPositions(
 	width: number,
 	height: number,
 	stars: StarData[]
@@ -157,6 +157,59 @@ export function renderStarway(
 		ctx.fillText(star.name, x, y + drawR + 6);
 	}
 
+	// Connection lines to other starways
+	for (const pos of positions) {
+		const {x, y, star} = pos;
+		if (!star.connectTo || !star.connectToStarway) continue;
+
+		const lineLen = 100;
+		// Extend to the right if star is on the left half, otherwise to the left
+		const dir = x < width / 2 ? 1 : -1;
+		const endX = x + dir * lineLen;
+
+		// Dotted line
+		ctx.save();
+		ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+		ctx.lineWidth = 1;
+		ctx.setLineDash([4, 4]);
+		ctx.beginPath();
+		ctx.moveTo(x, y);
+		ctx.lineTo(endX, y);
+		ctx.stroke();
+		ctx.restore();
+
+		// Arrow tip
+		const arrowSize = 5;
+		ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+		ctx.beginPath();
+		ctx.moveTo(endX, y);
+		ctx.lineTo(endX - dir * arrowSize, y - arrowSize);
+		ctx.lineTo(endX - dir * arrowSize, y + arrowSize);
+		ctx.closePath();
+		ctx.fill();
+
+		// Label (styled as a clickable link)
+		const labelText = `To ${star.connectTo} (${star.connectToStarway})`;
+		const labelX = endX + dir * 4;
+		const labelY = y - 4;
+		ctx.fillStyle = "rgba(100, 180, 255, 0.85)";
+		ctx.font = "11px sans-serif";
+		ctx.textAlign = dir > 0 ? "left" : "right";
+		ctx.textBaseline = "bottom";
+		ctx.fillText(labelText, labelX, labelY);
+
+		// Underline
+		const metrics = ctx.measureText(labelText);
+		const ulStartX = dir > 0 ? labelX : labelX - metrics.width;
+		ctx.strokeStyle = "rgba(100, 180, 255, 0.5)";
+		ctx.lineWidth = 0.5;
+		ctx.setLineDash([]);
+		ctx.beginPath();
+		ctx.moveTo(ulStartX, labelY + 1);
+		ctx.lineTo(ulStartX + metrics.width, labelY + 1);
+		ctx.stroke();
+	}
+
 	// Title
 	ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
 	ctx.font = "bold 16px sans-serif";
@@ -179,6 +232,38 @@ export function starwayHitTest(
 		const hitRadius = Math.max(pos.star.size * 0.4, 6) + 6;
 		if (dx * dx + dy * dy <= hitRadius * hitRadius) {
 			return pos.star;
+		}
+	}
+	return null;
+}
+
+/** Hit-test connection labels. Returns the target star name and starway, or null. */
+export function connectionHitTest(
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+	stars: StarData[]
+): {connectTo: string; connectToStarway: string} | null {
+	const positions = computeStarPositions(width, height, stars);
+	for (const pos of positions) {
+		const {star} = pos;
+		if (!star.connectTo || !star.connectToStarway) continue;
+
+		const lineLen = 100;
+		const dir = pos.x < width / 2 ? 1 : -1;
+		const endX = pos.x + dir * lineLen;
+
+		// Hit area around the text label only
+		// Label is drawn at (endX + dir*4, y - 4) with textBaseline "bottom", font ~11px
+		const labelX = endX + dir * 4;
+		const labelText = `To ${star.connectTo} (${star.connectToStarway})`;
+		const labelWidth = labelText.length * 6.5; // approximate 11px font char width
+		const labelMinX = dir > 0 ? labelX : labelX - labelWidth;
+		const labelMaxX = dir > 0 ? labelX + labelWidth : labelX;
+
+		if (x >= labelMinX - 4 && x <= labelMaxX + 4 && y >= pos.y - 20 && y <= pos.y) {
+			return {connectTo: star.connectTo, connectToStarway: star.connectToStarway};
 		}
 	}
 	return null;
