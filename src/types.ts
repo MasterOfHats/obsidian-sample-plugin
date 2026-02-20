@@ -17,6 +17,8 @@ export const STAR_DEFAULTS: Omit<StarData, "name" | "filePath" | "starway"> = {
 	position: -1
 };
 
+export type PlanetTrait = "NoAtmosphere" | "GoodAtmosphere";
+
 export interface PlanetData {
 	name: string;
 	filePath: string;
@@ -25,6 +27,7 @@ export interface PlanetData {
 	color: string;
 	orbitSpeed: number;
 	startAngle: number;
+	planet_traits: PlanetTrait[];
 }
 
 export const PLANET_DEFAULTS: Omit<PlanetData, "name" | "filePath"> = {
@@ -33,7 +36,10 @@ export const PLANET_DEFAULTS: Omit<PlanetData, "name" | "filePath"> = {
 	color: "#3498db",
 	orbitSpeed: 0.5,
 	startAngle: 0,
+	planet_traits: [],
 };
+
+export const VALID_PLANET_TRAITS: readonly string[] = ["NoAtmosphere", "GoodAtmosphere"];
 
 export interface AsteroidData {
 	name: string;

@@ -1,4 +1,4 @@
-import {PlanetData, AsteroidData, StarData, STAR_DEFAULTS} from "../types";
+import {PlanetData, AsteroidData, StarData, STAR_DEFAULTS, PlanetTrait} from "../types";
 
 interface PlanetPosition {
 	x: number;
@@ -43,6 +43,147 @@ function seededRandom(seed: number): () => number {
 		s ^= s << 5;
 		return (s >>> 0) / 0xFFFFFFFF;
 	};
+}
+
+/** Pre-computed crater layout for a planet (offsets relative to centre). */
+interface CraterLayout {
+	offsets: {dx: number; dy: number; r: number; alpha: number}[];
+}
+
+/** Cache of crater layouts keyed by planet name, so we don't regenerate every frame. */
+const craterCache = new Map<string, CraterLayout>();
+
+/** Generate a stable, evenly-spaced crater layout for a given planet name + radius. */
+function getCraterLayout(name: string, radius: number): CraterLayout {
+	const key = `${name}:${radius}`;
+	const cached = craterCache.get(key);
+	if (cached) return cached;
+
+	const rand = seededRandom(hash(`craters-${name}`));
+	const targetCount = Math.max(3, Math.floor(radius * 0.8));
+	const minSep = radius * 0.22; // minimum distance between crater centres
+	const maxAttempts = targetCount * 20;
+
+	const placed: {dx: number; dy: number; r: number; alpha: number}[] = [];
+	let attempts = 0;
+
+	while (placed.length < targetCount && attempts < maxAttempts) {
+		attempts++;
+		const angle = rand() * Math.PI * 2;
+		// Bias toward edges with sqrt for uniform area distribution
+		const dist = Math.sqrt(rand()) * radius * 0.8;
+		const dx = Math.cos(angle) * dist;
+		const dy = Math.sin(angle) * dist;
+		const craterR = radius * (0.08 + rand() * 0.15);
+
+		// Reject if too close to an existing crater
+		let tooClose = false;
+		for (const other of placed) {
+			const sepX = dx - other.dx;
+			const sepY = dy - other.dy;
+			if (sepX * sepX + sepY * sepY < minSep * minSep) {
+				tooClose = true;
+				break;
+			}
+		}
+		if (tooClose) continue;
+
+		placed.push({dx, dy, r: craterR, alpha: 0.4 + rand() * 0.3});
+	}
+
+	const layout: CraterLayout = {offsets: placed};
+	craterCache.set(key, layout);
+	return layout;
+}
+
+/** Draw craters on a planet (NoAtmosphere trait). */
+function drawCraters(
+	ctx: CanvasRenderingContext2D,
+	cx: number,
+	cy: number,
+	radius: number,
+	baseColor: string,
+	name: string
+): void {
+	const layout = getCraterLayout(name, radius);
+	const darkColor = darkenColor(baseColor, 0.55);
+
+	ctx.save();
+	// Clip to the planet circle so craters don't bleed outside
+	ctx.beginPath();
+	ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+	ctx.clip();
+
+	for (const c of layout.offsets) {
+		const craterX = cx + c.dx;
+		const craterY = cy + c.dy;
+
+		// Crater shadow (darker circle)
+		ctx.fillStyle = hexToRgba(darkColor, c.alpha);
+		ctx.beginPath();
+		ctx.arc(craterX, craterY, c.r, 0, Math.PI * 2);
+		ctx.fill();
+
+		// Crater rim highlight (subtle lighter edge on one side)
+		ctx.strokeStyle = hexToRgba(baseColor, 0.15);
+		ctx.lineWidth = Math.max(0.5, c.r * 0.15);
+		ctx.beginPath();
+		ctx.arc(craterX, craterY, c.r, -Math.PI * 0.7, Math.PI * 0.3);
+		ctx.stroke();
+	}
+
+	ctx.restore();
+}
+
+/** Draw a fresnel atmosphere glow around a planet (GoodAtmosphere trait). */
+function drawAtmosphere(
+	ctx: CanvasRenderingContext2D,
+	cx: number,
+	cy: number,
+	radius: number
+): void {
+	const atmosphereWidth = radius * 0.35;
+	const outerR = radius + atmosphereWidth;
+
+	// Outer glow — fades from transparent at the planet edge to blue, then back to transparent
+	const glow = ctx.createRadialGradient(cx, cy, radius * 0.85, cx, cy, outerR);
+	glow.addColorStop(0, "rgba(100, 180, 255, 0)");
+	glow.addColorStop(0.35, "rgba(100, 180, 255, 0.15)");
+	glow.addColorStop(0.65, "rgba(80, 160, 255, 0.25)");
+	glow.addColorStop(1, "rgba(60, 140, 255, 0)");
+
+	ctx.fillStyle = glow;
+	ctx.beginPath();
+	ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+	ctx.fill();
+
+	// Inner fresnel rim — a bright edge ring just inside the planet outline
+	const rim = ctx.createRadialGradient(cx, cy, radius * 0.7, cx, cy, radius);
+	rim.addColorStop(0, "rgba(100, 180, 255, 0)");
+	rim.addColorStop(0.75, "rgba(100, 180, 255, 0)");
+	rim.addColorStop(0.92, "rgba(120, 200, 255, 0.2)");
+	rim.addColorStop(1, "rgba(140, 210, 255, 0.35)");
+
+	ctx.fillStyle = rim;
+	ctx.beginPath();
+	ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+	ctx.fill();
+}
+
+/** Draw trait effects on a planet body. */
+function drawPlanetTraits(
+	ctx: CanvasRenderingContext2D,
+	x: number,
+	y: number,
+	planet: PlanetData
+): void {
+	for (const trait of planet.planet_traits) {
+		if (trait === "NoAtmosphere") {
+			drawCraters(ctx, x, y, planet.size, planet.color, planet.name);
+		} else if (trait === "GoodAtmosphere") {
+			drawAtmosphere(ctx, x, y, planet.size);
+		}
+	}
 }
 
 /** Draw an asteroid belt centred at (cx, cy). */
@@ -164,6 +305,11 @@ export function render(
 		ctx.arc(x, y, planet.size, 0, Math.PI * 2);
 		ctx.fill();
 
+		// Trait visual effects (e.g. craters for NoAtmosphere)
+		if (planet.planet_traits.length > 0) {
+			drawPlanetTraits(ctx, x, y, planet);
+		}
+
 		// Planet label
 		ctx.fillStyle = "#ffffff";
 		ctx.font = "12px sans-serif";
@@ -182,6 +328,10 @@ export function render(
 				ctx.beginPath();
 				ctx.arc(mx, my, mPos.planet.size, 0, Math.PI * 2);
 				ctx.fill();
+
+				if (mPos.planet.planet_traits.length > 0) {
+					drawPlanetTraits(ctx, mx, my, mPos.planet);
+				}
 
 				ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
 				ctx.font = "10px sans-serif";

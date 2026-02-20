@@ -1,5 +1,5 @@
 import {ItemView, TFile, WorkspaceLeaf, debounce, EventRef, setIcon} from "obsidian";
-import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, AsteroidData, StarData, PLANET_DEFAULTS, ASTEROID_DEFAULTS, STAR_DEFAULTS} from "../types";
+import {VIEW_TYPE_SOLAR_SYSTEM, PlanetData, AsteroidData, StarData, PlanetTrait, PLANET_DEFAULTS, ASTEROID_DEFAULTS, STAR_DEFAULTS, VALID_PLANET_TRAITS} from "../types";
 import {render, hitTest, HitResult} from "./SolarSystemRenderer";
 import {renderStarway, starwayHitTest, connectionHitTest, computeStarPositions} from "./StarwayRenderer";
 import MyPlugin from "../main";
@@ -33,6 +33,10 @@ export class SolarSystemView extends ItemView {
 	private systemPanX = 0;
 	private systemPanY = 0;
 	private systemZoom = 1;
+
+	// Freeze state (shift held)
+	private shiftHeld = false;
+	private frozenTime = 0;
 
 	// Shared drag state
 	private isDragging = false;
@@ -250,16 +254,23 @@ export class SolarSystemView extends ItemView {
 		this.canvas.addEventListener("mouseup", this.onCanvasMouseUp);
 		this.canvas.addEventListener("mouseleave", this.onCanvasMouseUp);
 		this.canvas.addEventListener("wheel", this.onCanvasWheel, {passive: false});
+		window.addEventListener("keydown", this.onKeyDown);
+		window.addEventListener("keyup", this.onKeyUp);
+		window.addEventListener("blur", this.onWindowBlur);
 	}
 
 	private teardownCanvas(): void {
 		this.stopAnimation();
+		this.shiftHeld = false;
 		this.canvas?.removeEventListener("click", this.onCanvasClick);
 		this.canvas?.removeEventListener("mousemove", this.onCanvasMouseMove);
 		this.canvas?.removeEventListener("mousedown", this.onCanvasMouseDown);
 		this.canvas?.removeEventListener("mouseup", this.onCanvasMouseUp);
 		this.canvas?.removeEventListener("mouseleave", this.onCanvasMouseUp);
 		this.canvas?.removeEventListener("wheel", this.onCanvasWheel);
+		window.removeEventListener("keydown", this.onKeyDown);
+		window.removeEventListener("keyup", this.onKeyUp);
+		window.removeEventListener("blur", this.onWindowBlur);
 		if (this.resizeObserver) {
 			this.resizeObserver.disconnect();
 			this.resizeObserver = null;
@@ -532,6 +543,7 @@ export class SolarSystemView extends ItemView {
 					color: typeof fm?.planet_color === "string" ? fm.planet_color : PLANET_DEFAULTS.color,
 					orbitSpeed: this.numOrDefault(fm?.orbit_speed, PLANET_DEFAULTS.orbitSpeed),
 					startAngle: this.numOrDefault(fm?.start_angle, PLANET_DEFAULTS.startAngle) * (Math.PI / 180),
+					planet_traits: this.parseTraits(fm?.planet_traits),
 				};
 			});
 	}
@@ -567,6 +579,7 @@ export class SolarSystemView extends ItemView {
 				color: typeof fm.planet_color === "string" ? fm.planet_color : PLANET_DEFAULTS.color,
 				orbitSpeed: this.numOrDefault(fm.orbit_speed, PLANET_DEFAULTS.orbitSpeed),
 				startAngle: this.numOrDefault(fm.start_angle, PLANET_DEFAULTS.startAngle) * (Math.PI / 180),
+				planet_traits: this.parseTraits(fm.planet_traits),
 			};
 
 			const existing = this.moons.get(locationParent);
@@ -631,7 +644,14 @@ export class SolarSystemView extends ItemView {
 		this.stopAnimation();
 		this.startTime = performance.now() / 1000;
 		const frame = (): void => {
-			const time = performance.now() / 1000 - this.startTime;
+			const elapsed = performance.now() / 1000 - this.startTime;
+			if (this.shiftHeld) {
+				// Keep startTime moving forward so unfreeze resumes smoothly
+				this.startTime = performance.now() / 1000 - this.frozenTime;
+			} else {
+				this.frozenTime = elapsed;
+			}
+			const time = this.frozenTime;
 			const {width, height} = this.canvasDimensions();
 			this.ctx.save();
 			if (this.mode === "starway") {
@@ -663,6 +683,13 @@ export class SolarSystemView extends ItemView {
 
 	private numOrDefault(value: unknown, fallback: number): number {
 		return typeof value === "number" && isFinite(value) ? value : fallback;
+	}
+
+	private parseTraits(value: unknown): PlanetTrait[] {
+		if (!Array.isArray(value)) return [];
+		return value.filter(
+			(v): v is PlanetTrait => typeof v === "string" && VALID_PLANET_TRAITS.includes(v)
+		);
 	}
 
 	private getCanvasCoords(evt: MouseEvent): {x: number; y: number} {
@@ -828,6 +855,18 @@ export class SolarSystemView extends ItemView {
 		this.systemPanX = worldX * newZoom - x + width / 2;
 		this.systemPanY = worldY * newZoom - y + height / 2;
 		this.systemZoom = newZoom;
+	};
+
+	private onKeyDown = (evt: KeyboardEvent): void => {
+		if (evt.key === "Shift") this.shiftHeld = true;
+	};
+
+	private onKeyUp = (evt: KeyboardEvent): void => {
+		if (evt.key === "Shift") this.shiftHeld = false;
+	};
+
+	private onWindowBlur = (): void => {
+		this.shiftHeld = false;
 	};
 
 	private updateHeader(): void {
