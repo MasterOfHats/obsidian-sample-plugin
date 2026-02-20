@@ -768,7 +768,7 @@ export class SolarSystemView extends ItemView {
 			}
 		} else if (this.mode === "system") {
 			const {wx, wy} = this.screenToWorld(x, y);
-			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.moons, this.planetAsteroids, this.currentTime());
+			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.moons, this.planetAsteroids, this.currentTime(), this.selectedStar);
 			if (hit) {
 				const file = this.app.vault.getAbstractFileByPath(hit.data.filePath);
 				if (file instanceof TFile) {
@@ -812,7 +812,7 @@ export class SolarSystemView extends ItemView {
 			this.canvas.style.cursor = (star || conn) ? "pointer" : "grab";
 		} else if (this.mode === "system") {
 			const {wx, wy} = this.screenToWorld(x, y);
-			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.moons, this.planetAsteroids, this.currentTime());
+			const hit = hitTest(wx, wy, this.planets, this.asteroids, this.moons, this.planetAsteroids, this.currentTime(), this.selectedStar);
 			this.canvas.style.cursor = hit ? "pointer" : "grab";
 		}
 	};

@@ -357,15 +357,16 @@ function darkenColor(hex: string, factor: number): string {
 	return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-/** Hit result — a planet, moon, or asteroid belt. */
+/** Hit result — a star, planet, moon, or asteroid belt. */
 export type HitResult =
+	| {type: "star"; data: StarData}
 	| {type: "planet"; data: PlanetData}
 	| {type: "moon"; data: PlanetData}
 	| {type: "asteroid"; data: AsteroidData};
 
 /**
  * Hit-tests in world coordinates (origin at star centre).
- * Checks moons first (smallest targets), then planets, then asteroid belts.
+ * Checks moons first (smallest targets), then planets, then asteroid belts, then the star.
  */
 export function hitTest(
 	worldX: number,
@@ -374,7 +375,8 @@ export function hitTest(
 	asteroids: AsteroidData[],
 	moons: Map<string, PlanetData[]>,
 	planetAsteroids: Map<string, AsteroidData[]>,
-	time: number
+	time: number,
+	star?: StarData | null
 ): HitResult | null {
 	const positions = computePositions(planets, time);
 
@@ -422,6 +424,14 @@ export function hitTest(
 	for (const belt of asteroids) {
 		if (Math.abs(dist - belt.orbitRadius) <= belt.spread + 4) {
 			return {type: "asteroid", data: belt};
+		}
+	}
+
+	// Central star
+	if (star) {
+		const starRadius = star.size ?? STAR_DEFAULTS.size;
+		if (dist <= starRadius + 4) {
+			return {type: "star", data: star};
 		}
 	}
 
