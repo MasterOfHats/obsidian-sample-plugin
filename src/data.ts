@@ -85,6 +85,7 @@ export const SKILLS: SkillDef[] = [
 	{ name: 'senses', label: 'Senses', attribute: 'acuity' },
 	// Apperception
 	{ name: 'biology', label: 'Biology', attribute: 'apperception' },
+	{ name: 'cosmography', label: 'Cosmography', attribute: 'apperception' },
 	{ name: 'engineering', label: 'Engineering', attribute: 'apperception' },
 	{ name: 'geology', label: 'Geology', attribute: 'apperception' },
 	{ name: 'history', label: 'History', attribute: 'apperception' },
