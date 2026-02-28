@@ -1,35 +1,59 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
+import { App, PluginSettingTab, Setting } from 'obsidian';
+import type CharacterSheetPlugin from './main';
 
-export interface MyPluginSettings {
-	mySetting: string;
+export interface CharacterSheetSettings {
+	defaultProficiency: number;
+	autoCalculate: boolean;
+	diceNotificationDuration: number;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+export const DEFAULT_SETTINGS: CharacterSheetSettings = {
+	defaultProficiency: 2,
+	autoCalculate: true,
+	diceNotificationDuration: 5000,
+};
 
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+export class CharacterSheetSettingTab extends PluginSettingTab {
+	plugin: CharacterSheetPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: CharacterSheetPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
 	display(): void {
-		const {containerEl} = this;
-
+		const { containerEl } = this;
 		containerEl.empty();
 
+		containerEl.createEl('h2', { text: 'Character Sheet Settings' });
+
 		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
+			.setName('Default proficiency')
+			.setDesc('Default proficiency bonus for new characters')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setValue(String(this.plugin.settings.defaultProficiency))
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.defaultProficiency = parseInt(value) || 2;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Auto-calculate')
+			.setDesc('Automatically calculate modifiers and skill bonuses from attribute values')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.autoCalculate)
+				.onChange(async (value) => {
+					this.plugin.settings.autoCalculate = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Dice notification duration')
+			.setDesc('How long dice roll notifications stay visible (milliseconds)')
+			.addText(text => text
+				.setValue(String(this.plugin.settings.diceNotificationDuration))
+				.onChange(async (value) => {
+					this.plugin.settings.diceNotificationDuration = parseInt(value) || 5000;
 					await this.plugin.saveSettings();
 				}));
 	}

@@ -1,8 +1,468 @@
-/*
+/* Character Sheet Plugin Styles */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* ===== Sheet Container ===== */
+.cs-sheet {
+	border: 2px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 16px;
+	margin-bottom: 24px;
+	background: var(--background-secondary);
+	font-family: var(--font-interface);
+}
 
-If your plugin does not need CSS, delete this file.
+/* ===== Columns Layout ===== */
+.cs-columns {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	margin-top: 12px;
+}
 
-*/
+@media (max-width: 600px) {
+	.cs-columns {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ===== Section Headers ===== */
+.cs-section {
+	margin-bottom: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 10px;
+	background: var(--background-primary);
+}
+
+.cs-section-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+	padding-bottom: 4px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.cs-section-title {
+	font-weight: 700;
+	font-size: 0.85em;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-muted);
+}
+
+.cs-edit-btn {
+	cursor: pointer;
+	opacity: 0.4;
+	font-size: 0.9em;
+	transition: opacity 0.15s;
+}
+
+.cs-edit-btn:hover {
+	opacity: 1;
+}
+
+/* ===== Identity ===== */
+.cs-identity {
+	border-bottom: 2px solid var(--background-modifier-border);
+	padding-bottom: 12px;
+}
+
+.cs-identity .cs-section-header {
+	border-bottom: none;
+	margin-bottom: 4px;
+	padding-bottom: 0;
+}
+
+.cs-name {
+	font-size: 1.5em;
+	font-weight: 700;
+	color: var(--text-normal);
+	line-height: 1.2;
+}
+
+.cs-identity-details {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-top: 4px;
+	font-size: 0.9em;
+}
+
+.cs-alias {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.cs-occupation {
+	color: var(--text-accent);
+	font-weight: 600;
+}
+
+.cs-proficiency {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	padding: 1px 8px;
+	border-radius: 10px;
+	font-size: 0.85em;
+	font-weight: 600;
+}
+
+/* ===== Attributes Grid ===== */
+.cs-attr-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 8px;
+}
+
+.cs-attr-cell {
+	text-align: center;
+	padding: 6px 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+}
+
+.cs-attr-label {
+	font-size: 0.7em;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+.cs-attr-value {
+	font-size: 1.1em;
+	font-weight: 700;
+	color: var(--text-normal);
+}
+
+.cs-attr-mod {
+	font-size: 0.85em;
+	color: var(--text-accent);
+	font-weight: 600;
+}
+
+/* ===== Defenses ===== */
+.cs-defense-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.cs-defense-item {
+	text-align: center;
+	padding: 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+}
+
+.cs-defense-label {
+	font-size: 0.7em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+.cs-defense-value {
+	font-size: 1.3em;
+	font-weight: 700;
+	color: var(--text-normal);
+}
+
+/* ===== Saves ===== */
+.cs-saves {
+	display: flex;
+	gap: 8px;
+}
+
+.cs-save-item {
+	flex: 1;
+	text-align: center;
+	padding: 4px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+}
+
+.cs-save-item.cs-proficient {
+	border-color: var(--interactive-accent);
+	background: rgba(var(--interactive-accent-rgb, 72, 54, 153), 0.08);
+}
+
+.cs-save-label {
+	font-size: 0.65em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+.cs-save-value {
+	font-size: 1em;
+	font-weight: 700;
+}
+
+/* ===== Combat Grid ===== */
+.cs-combat-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 8px;
+}
+
+.cs-combat-item {
+	text-align: center;
+	padding: 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+}
+
+.cs-combat-label {
+	font-size: 0.65em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+.cs-combat-value {
+	font-size: 1.1em;
+	font-weight: 700;
+	color: var(--text-normal);
+}
+
+/* ===== Skills ===== */
+.cs-skill-table {
+	font-size: 0.85em;
+}
+
+.cs-skill-category {
+	font-size: 0.75em;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-muted);
+	font-weight: 700;
+	margin-top: 8px;
+	margin-bottom: 4px;
+	padding-top: 4px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.cs-skill-row {
+	display: flex;
+	align-items: center;
+	padding: 2px 4px;
+	border-radius: 3px;
+	gap: 6px;
+}
+
+.cs-skill-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.cs-skill-row.cs-proficient {
+	background: rgba(var(--interactive-accent-rgb, 72, 54, 153), 0.06);
+}
+
+.cs-skill-row.cs-proficient:hover {
+	background: rgba(var(--interactive-accent-rgb, 72, 54, 153), 0.12);
+}
+
+.cs-prof-dot {
+	font-size: 0.6em;
+	color: var(--text-muted);
+	width: 12px;
+	flex-shrink: 0;
+}
+
+.cs-proficient .cs-prof-dot {
+	color: var(--interactive-accent);
+}
+
+.cs-skill-name {
+	flex: 1;
+	color: var(--text-normal);
+}
+
+.cs-skill-attr {
+	font-size: 0.75em;
+	color: var(--text-faint);
+	width: 28px;
+	text-align: center;
+}
+
+.cs-skill-bonus {
+	font-weight: 700;
+	width: 28px;
+	text-align: right;
+	color: var(--text-normal);
+}
+
+/* ===== Clickable Elements ===== */
+.cs-clickable {
+	cursor: pointer;
+	transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.cs-clickable:active {
+	transform: scale(0.97);
+}
+
+/* ===== Currency & Favors ===== */
+.cs-currency-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.cs-currency-item {
+	text-align: center;
+	padding: 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+}
+
+.cs-currency-label {
+	font-size: 0.7em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+.cs-currency-value {
+	font-size: 1.2em;
+	font-weight: 700;
+	color: var(--text-normal);
+}
+
+.cs-favors {
+	margin-top: 6px;
+}
+
+.cs-favors-label {
+	font-size: 0.75em;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin-bottom: 2px;
+}
+
+.cs-favors-list {
+	margin: 0;
+	padding-left: 18px;
+	font-size: 0.85em;
+}
+
+.cs-favors-list li {
+	margin: 1px 0;
+	color: var(--text-normal);
+}
+
+/* ===== Dice Roller Modal ===== */
+.cs-dice-modal {
+	text-align: center;
+}
+
+.cs-dice-info {
+	font-size: 1.1em;
+	color: var(--text-muted);
+	margin-bottom: 12px;
+}
+
+.cs-roll-result {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin: 12px 0;
+	font-size: 1.4em;
+}
+
+.cs-roll-die {
+	font-weight: 700;
+	padding: 4px 10px;
+	border: 2px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+	min-width: 36px;
+	text-align: center;
+}
+
+.cs-roll-die.cs-crit {
+	border-color: #22c55e;
+	color: #22c55e;
+	background: rgba(34, 197, 94, 0.1);
+}
+
+.cs-roll-die.cs-fumble {
+	border-color: #ef4444;
+	color: #ef4444;
+	background: rgba(239, 68, 68, 0.1);
+}
+
+.cs-roll-modifier {
+	color: var(--text-muted);
+}
+
+.cs-roll-equals {
+	color: var(--text-faint);
+}
+
+.cs-roll-total {
+	font-weight: 700;
+	font-size: 1.2em;
+	color: var(--text-accent);
+}
+
+.cs-roll-label {
+	width: 100%;
+	font-size: 0.7em;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+}
+
+.cs-roll-label.cs-crit {
+	color: #22c55e;
+}
+
+.cs-roll-label.cs-fumble {
+	color: #ef4444;
+}
+
+.cs-roll-expr {
+	color: var(--text-muted);
+	font-size: 0.8em;
+}
+
+.cs-roll-details {
+	width: 100%;
+	font-size: 0.6em;
+	color: var(--text-faint);
+}
+
+/* ===== Edit Modal ===== */
+.cs-edit-modal {
+	max-height: 70vh;
+	overflow-y: auto;
+}
+
+.cs-edit-modal h2 {
+	margin-top: 0;
+}
+
+.cs-textarea {
+	width: 100%;
+	min-height: 80px;
+	padding: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 0.9em;
+	resize: vertical;
+}

@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "character-sheet-plugin",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Interactive TTRPG character sheets for Starways in Obsidian.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
