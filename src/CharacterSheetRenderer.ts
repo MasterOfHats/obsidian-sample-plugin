@@ -1,8 +1,8 @@
-import { App, MarkdownPostProcessorContext, TFile } from 'obsidian';
+import { MarkdownPostProcessorContext, TFile } from 'obsidian';
 import { CharacterSheet } from './types';
 import {
 	ATTRIBUTES, SAVES, SKILLS,
-	calculateModifier, getEffectiveModifier, calculateSkillBonus, calculateSaveBonus,
+	getEffectiveModifier, calculateSkillBonus, calculateSaveBonus,
 	formatModifier, parseCharacterSheet,
 } from './data';
 import { EditModal, EditSection } from './EditModal';
@@ -10,45 +10,82 @@ import { DiceRollerModal } from './DiceRollerModal';
 import type CharacterSheetPlugin from './main';
 
 export function registerRenderer(plugin: CharacterSheetPlugin) {
-	plugin.registerMarkdownPostProcessor((el, ctx) => {
-		const file = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
-		if (!(file instanceof TFile)) return;
+	// Usage:
+	//   ```cs
+	//   self
+	//   ```
+	//   Renders the current note's frontmatter as a character sheet.
+	//
+	//   ```cs
+	//   Harlan Silver
+	//   ```
+	//   Renders the character sheet from the note named "Harlan Silver".
+
+	plugin.registerMarkdownCodeBlockProcessor('cs', (source, el, ctx) => {
+		const target = source.trim();
+
+		let file: TFile | null;
+		if (!target || target.toLowerCase() === 'self') {
+			// Resolve the file the code block lives in
+			const abstract = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
+			file = abstract instanceof TFile ? abstract : null;
+		} else {
+			// Find a note by name (with or without .md extension)
+			file = resolveFile(plugin, target);
+		}
+
+		if (!file) {
+			el.createDiv({ cls: 'cs-error', text: `Character sheet not found: "${target}"` });
+			return;
+		}
 
 		const cache = plugin.app.metadataCache.getFileCache(file);
 		const fm = cache?.frontmatter;
-		if (!fm || fm.character_sheet !== true) return;
-
-		// The post-processor fires once per rendered SECTION (block),
-		// not once per note. We only want one character sheet per note.
-		// Check the parent preview container for an existing sheet to
-		// prevent duplicates.
-		const previewContainer = el.closest('.markdown-preview-view');
-		if (previewContainer?.querySelector('.cs-sheet')) return;
+		if (!fm || fm.character_sheet !== true) {
+			el.createDiv({
+				cls: 'cs-error',
+				text: `"${file.basename}" is not a character sheet (missing character_sheet: true in frontmatter)`,
+			});
+			return;
+		}
 
 		const sheet = parseCharacterSheet(fm);
-		if (!sheet) return;
+		if (!sheet) {
+			el.createDiv({ cls: 'cs-error', text: `Failed to parse character sheet from "${file.basename}"` });
+			return;
+		}
 
 		const wrapper = el.createDiv({ cls: 'cs-sheet' });
-		el.prepend(wrapper);
-
 		renderSheet(wrapper, sheet, plugin, file);
 	});
 }
 
+function resolveFile(plugin: CharacterSheetPlugin, name: string): TFile | null {
+	// Try exact path first
+	const byPath = plugin.app.vault.getAbstractFileByPath(name);
+	if (byPath instanceof TFile) return byPath;
+
+	// Try with .md extension
+	const withMd = plugin.app.vault.getAbstractFileByPath(name + '.md');
+	if (withMd instanceof TFile) return withMd;
+
+	// Search all markdown files by basename
+	const allFiles = plugin.app.vault.getMarkdownFiles();
+	const match = allFiles.find(f => f.basename.toLowerCase() === name.toLowerCase());
+	return match ?? null;
+}
+
 function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: CharacterSheetPlugin, file: TFile) {
-	// Identity Bar
 	renderIdentity(root, sheet, plugin, file);
 
 	const columns = root.createDiv({ cls: 'cs-columns' });
 	const leftCol = columns.createDiv({ cls: 'cs-col cs-col-left' });
 	const rightCol = columns.createDiv({ cls: 'cs-col cs-col-right' });
 
-	// Left column: Attributes, Defenses, Combat
 	renderAttributes(leftCol, sheet, plugin, file);
 	renderDefenses(leftCol, sheet, plugin, file);
 	renderCombat(leftCol, sheet, plugin, file);
 
-	// Right column: Skills, Currency & Favors
 	renderSkills(rightCol, sheet, plugin, file);
 	renderCurrency(rightCol, sheet, plugin, file);
 }
@@ -108,7 +145,6 @@ function renderDefenses(parent: HTMLElement, sheet: CharacterSheet, plugin: Char
 
 	const grid = section.createDiv({ cls: 'cs-defense-grid' });
 
-	// Avoidances
 	const meleeAv = grid.createDiv({ cls: 'cs-defense-item' });
 	meleeAv.createDiv({ cls: 'cs-defense-label', text: 'Melee Avoidance' });
 	meleeAv.createDiv({ cls: 'cs-defense-value', text: String(sheet.melee_avoidance) });
@@ -117,7 +153,6 @@ function renderDefenses(parent: HTMLElement, sheet: CharacterSheet, plugin: Char
 	rangedAv.createDiv({ cls: 'cs-defense-label', text: 'Ranged Avoidance' });
 	rangedAv.createDiv({ cls: 'cs-defense-value', text: String(sheet.ranged_avoidance) });
 
-	// Saves
 	const savesContainer = section.createDiv({ cls: 'cs-saves' });
 	for (const save of SAVES) {
 		const bonus = calculateSaveBonus(sheet, save.name);
@@ -164,7 +199,6 @@ function renderSkills(parent: HTMLElement, sheet: CharacterSheet, plugin: Charac
 
 	const table = section.createDiv({ cls: 'cs-skill-table' });
 
-	// Group: personal skills first, then ship
 	const personalSkills = SKILLS.filter(s => !s.category);
 	const shipSkills = SKILLS.filter(s => s.category === 'Ship');
 
@@ -221,7 +255,6 @@ function renderCurrency(parent: HTMLElement, sheet: CharacterSheet, plugin: Char
 	reliability.createDiv({ cls: 'cs-currency-label', text: 'Reliability' });
 	reliability.createDiv({ cls: 'cs-currency-value', text: String(sheet.reliability) });
 
-	// Favors
 	const favors = sheet.favors ?? [];
 	const favorsOwed = sheet.favors_owed ?? [];
 
