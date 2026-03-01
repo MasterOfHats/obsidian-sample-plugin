@@ -83,9 +83,11 @@ async function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: Cha
 	const leftCol = columns.createDiv({ cls: 'cs-col cs-col-left' });
 	const rightCol = columns.createDiv({ cls: 'cs-col cs-col-right' });
 
-	renderAttributes(leftCol, sheet, plugin, file);
-	renderDefenses(leftCol, sheet, plugin, file);
+
+
 	renderCombat(leftCol, sheet, plugin, file);
+	renderDefenses(leftCol, sheet, plugin, file);
+	renderAttributes(leftCol, sheet, plugin, file);
 
 	renderSkills(rightCol, sheet, plugin, file);
 	renderCurrency(rightCol, sheet, plugin, file);
