@@ -556,6 +556,48 @@
 	color: var(--color-yellow, #e0b300);
 }
 
+/* ===== Inline Dice Expressions ===== */
+.cs-dice-expr {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 5px;
+	margin: 0 1px;
+	border-radius: 4px;
+	background: var(--background-secondary-alt, var(--background-secondary));
+	border: 1px solid var(--background-modifier-border);
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+	font-weight: 600;
+	color: var(--text-accent);
+	white-space: nowrap;
+}
+
+.cs-dice-icon {
+	font-size: 0.8em;
+}
+
+/* ===== Inline Distance Expressions ===== */
+.cs-dist-expr {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 5px;
+	margin: 0 1px;
+	border-radius: 4px;
+	background: var(--background-secondary-alt, var(--background-secondary));
+	border: 1px solid var(--background-modifier-border);
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+	font-weight: 600;
+	color: var(--color-green, #4caf50);
+	white-space: nowrap;
+}
+
+.cs-dist-icon {
+	font-size: 0.8em;
+}
+
 /* ===== Inline Status References ===== */
 .cs-status-ref {
 	color: var(--color-yellow, #e0b300);
