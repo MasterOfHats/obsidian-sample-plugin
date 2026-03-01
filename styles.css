@@ -471,6 +471,12 @@
 	flex-wrap: wrap;
 }
 
+.cs-ability-name-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
 .cs-ability-name {
 	font-weight: 700;
 	font-size: 1.05em;
@@ -499,8 +505,28 @@
 	font-weight: 600;
 	padding: 2px 8px;
 	border-radius: 10px;
-	border: 1px solid var(--text-muted);
-	color: var(--text-muted);
+	border: 1px solid var(--color-pink, #c44daa);
+	color: var(--color-pink, #c44daa);
+}
+
+.cs-ability-target-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+.cs-ability-target-label {
+	font-size: 0.7em;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--color-orange, #d0841a);
+}
+
+.cs-ability-target {
+	font-size: 0.85em;
+	color: var(--color-orange, #d0841a);
 }
 
 .cs-ability-desc {
@@ -508,6 +534,34 @@
 	font-size: 0.9em;
 	color: var(--text-normal);
 	line-height: 1.5;
+}
+
+.cs-ability-notes {
+	margin-top: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.cs-ability-note {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 4px 8px;
+	border-radius: 4px;
+	background: rgba(var(--color-yellow-rgb, 224, 179, 0), 0.1);
+	border-left: 2px solid var(--color-yellow, #e0b300);
+	font-size: 0.82em;
+	line-height: 1.4;
+}
+
+.cs-ability-note-icon {
+	flex-shrink: 0;
+	font-size: 0.85em;
+}
+
+.cs-ability-note-text {
+	color: var(--text-normal);
 }
 
 /* ===== Edit Modal ===== */
