@@ -94,7 +94,7 @@ async function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: Cha
 	const content = await plugin.app.vault.cachedRead(file);
 	const abilities = extractAbilities(content);
 	if (abilities.length > 0) {
-		renderAbilities(root, abilities);
+		renderAbilities(root, abilities, plugin);
 	}
 }
 
@@ -285,19 +285,19 @@ function renderCurrency(parent: HTMLElement, sheet: CharacterSheet, plugin: Char
 	}
 }
 
-function renderAbilities(root: HTMLElement, abilities: AbilityBlock[]) {
+function renderAbilities(root: HTMLElement, abilities: AbilityBlock[], plugin: CharacterSheetPlugin) {
 	const active = abilities.filter(a => a.action.toLowerCase() !== 'passive');
 	const passive = abilities.filter(a => a.action.toLowerCase() === 'passive');
 
 	if (active.length > 0) {
-		renderAbilityGroup(root, 'Abilities', active);
+		renderAbilityGroup(root, 'Abilities', active, plugin);
 	}
 	if (passive.length > 0) {
-		renderAbilityGroup(root, 'Features', passive);
+		renderAbilityGroup(root, 'Features', passive, plugin);
 	}
 }
 
-function renderAbilityGroup(root: HTMLElement, title: string, abilities: AbilityBlock[]) {
+function renderAbilityGroup(root: HTMLElement, title: string, abilities: AbilityBlock[], plugin: CharacterSheetPlugin) {
 	const section = root.createDiv({ cls: 'cs-section cs-abilities-section' });
 	const header = section.createDiv({ cls: 'cs-section-header' });
 	header.createSpan({ text: title, cls: 'cs-section-title' });
@@ -341,7 +341,7 @@ function renderAbilityGroup(root: HTMLElement, title: string, abilities: Ability
 		}
 
 		if (ability.description) {
-			renderDescription(tooltip, ability.description);
+			renderDescription(tooltip, ability.description, plugin);
 		}
 
 		if (ability.notes.length > 0) {
