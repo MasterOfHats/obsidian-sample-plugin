@@ -454,6 +454,62 @@
 	font-size: 0.9em;
 }
 
+/* ===== Ability Card ===== */
+.cs-ability {
+	border: 1px solid var(--background-modifier-border);
+	border-left: 3px solid var(--interactive-accent);
+	border-radius: 6px;
+	padding: 10px 14px;
+	background: var(--background-secondary);
+}
+
+.cs-ability-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.cs-ability-name {
+	font-weight: 700;
+	font-size: 1.05em;
+	color: var(--text-normal);
+}
+
+.cs-ability-tags {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.cs-ability-action {
+	font-size: 0.75em;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 2px 8px;
+	border-radius: 10px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.cs-ability-cost {
+	font-size: 0.75em;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 10px;
+	border: 1px solid var(--text-muted);
+	color: var(--text-muted);
+}
+
+.cs-ability-desc {
+	margin-top: 8px;
+	font-size: 0.9em;
+	color: var(--text-normal);
+	line-height: 1.5;
+}
+
 /* ===== Edit Modal ===== */
 .cs-edit-modal {
 	max-height: 70vh;

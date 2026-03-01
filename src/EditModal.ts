@@ -1,4 +1,4 @@
-import { App, Modal, Setting, TFile } from 'obsidian';
+import { App, MarkdownView, Modal, Setting, TFile, View, WorkspaceLeaf } from 'obsidian';
 import { CharacterSheet, AttributeName, SaveName } from './types';
 import { ATTRIBUTES, SAVES, SKILLS } from './data';
 import type CharacterSheetPlugin from './main';
@@ -197,6 +197,21 @@ export class EditModal extends Modal {
 					break;
 			}
 		});
+
+		// Re-render any open views that display this file so the
+		// code block picks up the updated frontmatter.
+		this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
+		
+			const view = leaf.view;
+			if (view instanceof MarkdownView && view.file?.path === this.file.path) {
+				view.save();
+				if(view.getMode() === 'preview'){
+					view.previewMode.rerender(true);
+				}
+			}
+				
+		});
+
 		this.close();
 	}
 }
