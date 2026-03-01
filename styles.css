@@ -8,6 +8,7 @@
 	margin-bottom: 24px;
 	background: var(--background-secondary);
 	font-family: var(--font-interface);
+	overflow: visible;
 }
 
 /* ===== Columns Layout ===== */
@@ -16,6 +17,7 @@
 	grid-template-columns: 1fr 1fr;
 	gap: 16px;
 	margin-top: 12px;
+	overflow: visible;
 }
 
 @media (max-width: 600px) {
@@ -31,6 +33,7 @@
 	border-radius: 6px;
 	padding: 10px;
 	background: var(--background-primary);
+	overflow: visible;
 }
 
 .cs-section-header {
@@ -442,6 +445,75 @@
 	width: 100%;
 	font-size: 0.6em;
 	color: var(--text-faint);
+}
+
+/* ===== Abilities Section (in character sheet) ===== */
+.cs-abilities-section {
+	grid-column: 1 / -1;
+}
+
+.cs-abilities-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	overflow: visible;
+}
+
+.cs-abilities-item {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+	cursor: default;
+	font-size: 0.85em;
+}
+
+.cs-abilities-item:hover {
+	border-color: var(--interactive-accent);
+	background: var(--background-primary);
+}
+
+.cs-abilities-item-name {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.cs-abilities-item-action {
+	font-size: 0.7em;
+	font-weight: 600;
+	text-transform: uppercase;
+	padding: 1px 5px;
+	border-radius: 8px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+/* Tooltip */
+.cs-abilities-tooltip {
+	display: none;
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: var(--layer-popover, 30);
+	width: max-content;
+	max-width: 360px;
+	padding: 10px 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-left: 3px solid var(--interactive-accent);
+	border-radius: 6px;
+	background: var(--background-primary);
+	box-shadow: var(--shadow-s, 0 2px 8px rgba(0,0,0,0.15));
+	text-align: left;
+	pointer-events: none;
+}
+
+.cs-abilities-item:hover .cs-abilities-tooltip {
+	display: block;
 }
 
 /* ===== Error State ===== */

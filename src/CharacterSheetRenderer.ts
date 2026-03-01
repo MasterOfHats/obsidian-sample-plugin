@@ -7,6 +7,7 @@ import {
 } from './data';
 import { EditModal, EditSection } from './EditModal';
 import { DiceRollerModal } from './DiceRollerModal';
+import { AbilityBlock, extractAbilities } from './AbilityRenderer';
 import type CharacterSheetPlugin from './main';
 
 export function registerRenderer(plugin: CharacterSheetPlugin) {
@@ -56,7 +57,7 @@ export function registerRenderer(plugin: CharacterSheetPlugin) {
 		}
 
 		const wrapper = el.createDiv({ cls: 'cs-sheet' });
-		renderSheet(wrapper, sheet, plugin, file);
+		void renderSheet(wrapper, sheet, plugin, file);
 	});
 }
 
@@ -75,7 +76,7 @@ function resolveFile(plugin: CharacterSheetPlugin, name: string): TFile | null {
 	return match ?? null;
 }
 
-function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: CharacterSheetPlugin, file: TFile) {
+async function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: CharacterSheetPlugin, file: TFile) {
 	renderIdentity(root, sheet, plugin, file);
 
 	const columns = root.createDiv({ cls: 'cs-columns' });
@@ -88,6 +89,13 @@ function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: Character
 
 	renderSkills(rightCol, sheet, plugin, file);
 	renderCurrency(rightCol, sheet, plugin, file);
+
+	// Extract and render abilities from the note content
+	const content = await plugin.app.vault.cachedRead(file);
+	const abilities = extractAbilities(content);
+	if (abilities.length > 0) {
+		renderAbilities(root, abilities);
+	}
 }
 
 function sectionHeader(parent: HTMLElement, title: string, onClick: () => void): HTMLElement {
@@ -273,6 +281,64 @@ function renderCurrency(parent: HTMLElement, sheet: CharacterSheet, plugin: Char
 		const list = owedSection.createEl('ul', { cls: 'cs-favors-list' });
 		for (const f of favorsOwed) {
 			list.createEl('li', { text: f });
+		}
+	}
+}
+
+function renderAbilities(root: HTMLElement, abilities: AbilityBlock[]) {
+	const section = root.createDiv({ cls: 'cs-section cs-abilities-section' });
+	const header = section.createDiv({ cls: 'cs-section-header' });
+	header.createSpan({ text: 'Abilities', cls: 'cs-section-title' });
+
+	const grid = section.createDiv({ cls: 'cs-abilities-grid' });
+
+	for (const ability of abilities) {
+		const item = grid.createDiv({ cls: 'cs-abilities-item' });
+
+		// Compact display: name + action pills
+		item.createSpan({ cls: 'cs-abilities-item-name', text: ability.name });
+		if (ability.action) {
+			const actions = ability.action.split(',').map(a => a.trim()).filter(a => a);
+			for (const action of actions) {
+				item.createSpan({ cls: 'cs-abilities-item-action', text: action });
+			}
+		}
+
+		// Tooltip on hover
+		const tooltip = item.createDiv({ cls: 'cs-abilities-tooltip' });
+
+		// Tooltip header
+		const tipHeader = tooltip.createDiv({ cls: 'cs-ability-header' });
+		const nameGroup = tipHeader.createDiv({ cls: 'cs-ability-name-group' });
+		nameGroup.createSpan({ cls: 'cs-ability-name', text: ability.name });
+		if (ability.action) {
+			const actions = ability.action.split(',').map(a => a.trim()).filter(a => a);
+			for (const action of actions) {
+				nameGroup.createSpan({ cls: 'cs-ability-action', text: action });
+			}
+		}
+		const tipTags = tipHeader.createDiv({ cls: 'cs-ability-tags' });
+		if (ability.cost) {
+			tipTags.createSpan({ cls: 'cs-ability-cost', text: ability.cost });
+		}
+
+		if (ability.target) {
+			const targetRow = tooltip.createDiv({ cls: 'cs-ability-target-row' });
+			targetRow.createSpan({ cls: 'cs-ability-target-label', text: 'Target' });
+			targetRow.createSpan({ cls: 'cs-ability-target', text: ability.target });
+		}
+
+		if (ability.description) {
+			tooltip.createDiv({ cls: 'cs-ability-desc', text: ability.description });
+		}
+
+		if (ability.notes.length > 0) {
+			const notesEl = tooltip.createDiv({ cls: 'cs-ability-notes' });
+			for (const note of ability.notes) {
+				const noteItem = notesEl.createDiv({ cls: 'cs-ability-note' });
+				noteItem.createSpan({ cls: 'cs-ability-note-icon', text: '\u26A0' });
+				noteItem.createSpan({ cls: 'cs-ability-note-text', text: note });
+			}
 		}
 	}
 }

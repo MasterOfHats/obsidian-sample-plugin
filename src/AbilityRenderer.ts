@@ -1,6 +1,6 @@
 import type CharacterSheetPlugin from './main';
 
-interface AbilityBlock {
+export interface AbilityBlock {
 	name: string;
 	action: string;
 	cost: string;
@@ -9,7 +9,7 @@ interface AbilityBlock {
 	notes: string[];
 }
 
-function parseAbilityBlock(source: string): AbilityBlock | null {
+export function parseAbilityBlock(source: string): AbilityBlock | null {
 	const parts = source.split(/^---$/m, 2);
 	const headerRaw = parts[0]?.trim() ?? '';
 	const description = parts[1]?.trim() ?? '';
@@ -43,6 +43,17 @@ function parseAbilityBlock(source: string): AbilityBlock | null {
 		description,
 		notes,
 	};
+}
+
+export function extractAbilities(content: string): AbilityBlock[] {
+	const abilities: AbilityBlock[] = [];
+	const regex = /```ability\s*\n([\s\S]*?)```/g;
+	let match;
+	while ((match = regex.exec(content)) !== null) {
+		const parsed = parseAbilityBlock(match[1]!);
+		if (parsed) abilities.push(parsed);
+	}
+	return abilities;
 }
 
 export function registerAbilityRenderer(plugin: CharacterSheetPlugin) {
