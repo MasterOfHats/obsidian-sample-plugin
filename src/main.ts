@@ -3,6 +3,7 @@ import { CharacterSheetSettings, DEFAULT_SETTINGS, CharacterSheetSettingTab } fr
 import { registerRenderer } from './CharacterSheetRenderer';
 import { registerAbilityRenderer } from './AbilityRenderer';
 import { registerStatusEffectRenderer, invalidateStatusIndex } from './StatusEffectRenderer';
+import { registerResourceRenderer } from './ResourceRenderer';
 import { CreateCharacterModal } from './CreateCharacterModal';
 
 export default class CharacterSheetPlugin extends Plugin {
@@ -15,6 +16,7 @@ export default class CharacterSheetPlugin extends Plugin {
 		registerRenderer(this);
 		registerAbilityRenderer(this);
 		registerStatusEffectRenderer(this);
+		registerResourceRenderer(this);
 
 		// Ribbon icon for creating a new character
 		this.addRibbonIcon('user-plus', 'Create New Character', () => {

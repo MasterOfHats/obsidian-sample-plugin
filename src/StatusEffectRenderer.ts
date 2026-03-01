@@ -3,29 +3,32 @@ import { renderDescription } from './AbilityRenderer';
 import type CharacterSheetPlugin from './main';
 
 // Vault-wide status effect index, rebuilt lazily
-let statusIndex: Map<string, StatusEffectBlock> | null = null;
+let statusIndexPromise: Promise<Map<string, StatusEffectBlock>> | null = null;
 let statusIndexBuiltFor: CharacterSheetPlugin | null = null;
 
-export async function getStatusIndex(plugin: CharacterSheetPlugin): Promise<Map<string, StatusEffectBlock>> {
-	if (statusIndex && statusIndexBuiltFor === plugin) return statusIndex;
-
-	statusIndex = new Map();
-	statusIndexBuiltFor = plugin;
-
+async function buildStatusIndex(plugin: CharacterSheetPlugin): Promise<Map<string, StatusEffectBlock>> {
+	const index = new Map<string, StatusEffectBlock>();
 	const files = plugin.app.vault.getMarkdownFiles();
 	for (const file of files) {
 		const content = await plugin.app.vault.cachedRead(file);
 		const effects = extractStatusEffects(content);
 		for (const effect of effects) {
-			statusIndex.set(effect.name.toLowerCase(), effect);
+			index.set(effect.name.toLowerCase(), effect);
 		}
 	}
+	return index;
+}
 
-	return statusIndex;
+export async function getStatusIndex(plugin: CharacterSheetPlugin): Promise<Map<string, StatusEffectBlock>> {
+	if (statusIndexPromise && statusIndexBuiltFor === plugin) return statusIndexPromise;
+
+	statusIndexBuiltFor = plugin;
+	statusIndexPromise = buildStatusIndex(plugin);
+	return statusIndexPromise;
 }
 
 export function invalidateStatusIndex() {
-	statusIndex = null;
+	statusIndexPromise = null;
 }
 
 export interface StatusEffectBlock {

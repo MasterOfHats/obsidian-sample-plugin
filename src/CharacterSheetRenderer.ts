@@ -8,6 +8,7 @@ import {
 import { EditModal, EditSection } from './EditModal';
 import { DiceRollerModal } from './DiceRollerModal';
 import { AbilityBlock, extractAbilities, renderDescription } from './AbilityRenderer';
+import { ResourceBlock, extractResources } from './ResourceRenderer';
 import type CharacterSheetPlugin from './main';
 
 export function registerRenderer(plugin: CharacterSheetPlugin) {
@@ -92,8 +93,14 @@ async function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: Cha
 	renderSkills(rightCol, sheet, plugin, file);
 	renderCurrency(rightCol, sheet, plugin, file);
 
-	// Extract and render abilities from the note content
+	// Extract abilities and resources from the note content
 	const content = await plugin.app.vault.cachedRead(file);
+
+	const resources = extractResources(content);
+	if (resources.length > 0) {
+		renderResources(leftCol, resources, plugin, sheet);
+	}
+
 	const abilities = extractAbilities(content);
 	if (abilities.length > 0) {
 		renderAbilities(root, abilities, plugin, sheet);
@@ -283,6 +290,39 @@ function renderCurrency(parent: HTMLElement, sheet: CharacterSheet, plugin: Char
 		const list = owedSection.createEl('ul', { cls: 'cs-favors-list' });
 		for (const f of favorsOwed) {
 			list.createEl('li', { text: f });
+		}
+	}
+}
+
+function renderResources(parent: HTMLElement, resources: ResourceBlock[], plugin: CharacterSheetPlugin, sheet: CharacterSheet) {
+	const section = parent.createDiv({ cls: 'cs-section cs-resources-section' });
+	const header = section.createDiv({ cls: 'cs-section-header' });
+	header.createSpan({ text: 'Resources', cls: 'cs-section-title' });
+
+	const grid = section.createDiv({ cls: 'cs-resources-grid' });
+
+	for (const resource of resources) {
+		const item = grid.createDiv({ cls: 'cs-resources-item' });
+		item.createSpan({ cls: 'cs-resources-item-name', text: resource.name });
+
+		// Tooltip on hover
+		const tooltip = item.createDiv({ cls: 'cs-resources-tooltip' });
+
+		// Tooltip header
+		const tipHeader = tooltip.createDiv({ cls: 'cs-resource-header' });
+		tipHeader.createSpan({ cls: 'cs-resource-name', text: resource.name });
+
+		if (resource.description) {
+			renderDescription(tooltip, resource.description, plugin, sheet);
+		}
+
+		if (resource.notes.length > 0) {
+			const notesEl = tooltip.createDiv({ cls: 'cs-ability-notes' });
+			for (const note of resource.notes) {
+				const noteItem = notesEl.createDiv({ cls: 'cs-ability-note' });
+				noteItem.createSpan({ cls: 'cs-ability-note-icon', text: '\u26A0' });
+				noteItem.createSpan({ cls: 'cs-ability-note-text', text: note });
+			}
 		}
 	}
 }
