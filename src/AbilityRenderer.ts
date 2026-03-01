@@ -56,6 +56,15 @@ export function extractAbilities(content: string): AbilityBlock[] {
 	return abilities;
 }
 
+export function renderDescription(parent: HTMLElement, description: string) {
+	const desc = parent.createDiv({ cls: 'cs-ability-desc' });
+	const lines = description.split('\n');
+	for (let i = 0; i < lines.length; i++) {
+		if (i > 0) desc.createEl('br');
+		desc.appendText(lines[i]!);
+	}
+}
+
 export function registerAbilityRenderer(plugin: CharacterSheetPlugin) {
 	plugin.registerMarkdownCodeBlockProcessor('ability', (source, el) => {
 		const ability = parseAbilityBlock(source);
@@ -91,7 +100,7 @@ export function registerAbilityRenderer(plugin: CharacterSheetPlugin) {
 
 		// Description
 		if (ability.description) {
-			card.createDiv({ cls: 'cs-ability-desc', text: ability.description });
+			renderDescription(card, ability.description);
 		}
 
 		// Notes

@@ -608,6 +608,14 @@
 	line-height: 1.5;
 }
 
+.cs-ability-desc-line {
+	margin: 0 0 0 0;
+}
+
+.cs-ability-desc-line:last-child {
+	margin-bottom: 0;
+}
+
 .cs-ability-notes {
 	margin-top: 8px;
 	display: flex;

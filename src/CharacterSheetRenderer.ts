@@ -7,7 +7,7 @@ import {
 } from './data';
 import { EditModal, EditSection } from './EditModal';
 import { DiceRollerModal } from './DiceRollerModal';
-import { AbilityBlock, extractAbilities } from './AbilityRenderer';
+import { AbilityBlock, extractAbilities, renderDescription } from './AbilityRenderer';
 import type CharacterSheetPlugin from './main';
 
 export function registerRenderer(plugin: CharacterSheetPlugin) {
@@ -286,9 +286,21 @@ function renderCurrency(parent: HTMLElement, sheet: CharacterSheet, plugin: Char
 }
 
 function renderAbilities(root: HTMLElement, abilities: AbilityBlock[]) {
+	const active = abilities.filter(a => a.action.toLowerCase() !== 'passive');
+	const passive = abilities.filter(a => a.action.toLowerCase() === 'passive');
+
+	if (active.length > 0) {
+		renderAbilityGroup(root, 'Abilities', active);
+	}
+	if (passive.length > 0) {
+		renderAbilityGroup(root, 'Features', passive);
+	}
+}
+
+function renderAbilityGroup(root: HTMLElement, title: string, abilities: AbilityBlock[]) {
 	const section = root.createDiv({ cls: 'cs-section cs-abilities-section' });
 	const header = section.createDiv({ cls: 'cs-section-header' });
-	header.createSpan({ text: 'Abilities', cls: 'cs-section-title' });
+	header.createSpan({ text: title, cls: 'cs-section-title' });
 
 	const grid = section.createDiv({ cls: 'cs-abilities-grid' });
 
@@ -329,7 +341,7 @@ function renderAbilities(root: HTMLElement, abilities: AbilityBlock[]) {
 		}
 
 		if (ability.description) {
-			tooltip.createDiv({ cls: 'cs-ability-desc', text: ability.description });
+			renderDescription(tooltip, ability.description);
 		}
 
 		if (ability.notes.length > 0) {
