@@ -216,7 +216,7 @@ function renderLineWithRefs(container: HTMLElement, line: string, plugin: Charac
 					const descLines = effect.description.split('\n');
 					for (let j = 0; j < descLines.length; j++) {
 						if (j > 0) descDiv.createEl('br');
-						descDiv.appendText(descLines[j]!);
+						renderLineWithDice(descDiv, descLines[j]!, sheet);
 					}
 				}
 			} else {
