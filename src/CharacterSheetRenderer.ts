@@ -24,42 +24,60 @@ export function registerRenderer(plugin: CharacterSheetPlugin) {
 	//   Renders the character sheet from the note named "Harlan Silver".
 
 	plugin.registerMarkdownCodeBlockProcessor('cs', (source, el, ctx) => {
-		const target = source.trim();
+		processCharacterBlock(plugin, source, el, ctx, 'full');
+	});
 
-		let file: TFile | null;
-		if (!target || target.toLowerCase() === 'self') {
-			// Resolve the file the code block lives in
-			const abstract = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
-			file = abstract instanceof TFile ? abstract : null;
-		} else {
-			// Find a note by name (with or without .md extension)
-			file = resolveFile(plugin, target);
-		}
+	// Compact view for DM: combat+defense on row 1, attributes+proficient skills on row 2
+	plugin.registerMarkdownCodeBlockProcessor('cs_small', (source, el, ctx) => {
+		processCharacterBlock(plugin, source, el, ctx, 'small');
+	});
+}
 
-		if (!file) {
-			el.createDiv({ cls: 'cs-error', text: `Character sheet not found: "${target}"` });
-			return;
-		}
+function processCharacterBlock(
+	plugin: CharacterSheetPlugin,
+	source: string,
+	el: HTMLElement,
+	ctx: MarkdownPostProcessorContext,
+	mode: 'full' | 'small',
+) {
+	const target = source.trim();
 
-		const cache = plugin.app.metadataCache.getFileCache(file);
-		const fm = cache?.frontmatter;
-		if (!fm || fm.character_sheet !== true) {
-			el.createDiv({
-				cls: 'cs-error',
-				text: `"${file.basename}" is not a character sheet (missing character_sheet: true in frontmatter)`,
-			});
-			return;
-		}
+	let file: TFile | null;
+	if (!target || target.toLowerCase() === 'self') {
+		const abstract = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
+		file = abstract instanceof TFile ? abstract : null;
+	} else {
+		file = resolveFile(plugin, target);
+	}
 
-		const sheet = parseCharacterSheet(fm);
-		if (!sheet) {
-			el.createDiv({ cls: 'cs-error', text: `Failed to parse character sheet from "${file.basename}"` });
-			return;
-		}
+	if (!file) {
+		el.createDiv({ cls: 'cs-error', text: `Character sheet not found: "${target}"` });
+		return;
+	}
 
+	const cache = plugin.app.metadataCache.getFileCache(file);
+	const fm = cache?.frontmatter;
+	if (!fm || fm.character_sheet !== true) {
+		el.createDiv({
+			cls: 'cs-error',
+			text: `"${file.basename}" is not a character sheet (missing character_sheet: true in frontmatter)`,
+		});
+		return;
+	}
+
+	const sheet = parseCharacterSheet(fm);
+	if (!sheet) {
+		el.createDiv({ cls: 'cs-error', text: `Failed to parse character sheet from "${file.basename}"` });
+		return;
+	}
+
+	if (mode === 'small') {
+		const wrapper = el.createDiv({ cls: 'cs-sheet cs-sheet-small' });
+		void renderSheetSmall(wrapper, sheet, plugin, file);
+	} else {
 		const wrapper = el.createDiv({ cls: 'cs-sheet' });
 		void renderSheet(wrapper, sheet, plugin, file);
-	});
+	}
 }
 
 function resolveFile(plugin: CharacterSheetPlugin, name: string): TFile | null {
@@ -104,6 +122,53 @@ async function renderSheet(root: HTMLElement, sheet: CharacterSheet, plugin: Cha
 	const abilities = extractAbilities(content);
 	if (abilities.length > 0) {
 		renderAbilities(root, abilities, plugin, sheet);
+	}
+}
+
+async function renderSheetSmall(root: HTMLElement, sheet: CharacterSheet, plugin: CharacterSheetPlugin, file: TFile) {
+	renderIdentity(root, sheet, plugin, file);
+
+	// Row 1: Combat + Defense side by side
+	const row1 = root.createDiv({ cls: 'cs-small-row' });
+	renderCombat(row1, sheet, plugin, file);
+	renderDefenses(row1, sheet, plugin, file);
+
+	// Row 2: Attributes + Proficient Skills side by side
+	const row2 = root.createDiv({ cls: 'cs-small-row' });
+	renderAttributes(row2, sheet, plugin, file);
+	renderSkillsProficientOnly(row2, sheet, plugin, file);
+
+	// Abilities and features unchanged
+	const content = await plugin.app.vault.cachedRead(file);
+
+	const resources = extractResources(content);
+	if (resources.length > 0) {
+		renderResources(root, resources, plugin, sheet);
+	}
+
+	const abilities = extractAbilities(content);
+	if (abilities.length > 0) {
+		renderAbilities(root, abilities, plugin, sheet);
+	}
+}
+
+function renderSkillsProficientOnly(parent: HTMLElement, sheet: CharacterSheet, plugin: CharacterSheetPlugin, file: TFile) {
+	const proficientSkillNames = sheet.proficient_skills ?? [];
+	if (proficientSkillNames.length === 0) return;
+
+	const section = parent.createDiv({ cls: 'cs-section cs-skills' });
+	sectionHeader(section, 'Skills', () => openEdit(plugin, file, sheet, 'skills'));
+
+	const table = section.createDiv({ cls: 'cs-skill-table' });
+
+	const personalSkills = SKILLS.filter(s => !s.category && proficientSkillNames.includes(s.name));
+	const shipSkills = SKILLS.filter(s => s.category === 'Ship' && proficientSkillNames.includes(s.name));
+
+	renderSkillGroup(table, personalSkills, sheet, plugin);
+
+	if (shipSkills.length > 0) {
+		table.createDiv({ cls: 'cs-skill-category', text: 'Ship' });
+		renderSkillGroup(table, shipSkills, sheet, plugin);
 	}
 }
 
